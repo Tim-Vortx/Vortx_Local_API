@@ -3,8 +3,11 @@ import React, { useState, useEffect } from "react";
 function App() {
   // put a valid 8760‐hr load or your own Scenario here
   const [scenario, setScenario] = useState(JSON.stringify({
-    Site: { latitude: 40, longitude: -105 },
-    ElectricLoad: { load_kw: Array(8760).fill(10) }
+    Site: {
+      latitude: 40,
+      longitude: -105,
+      ElectricLoad: { loads_kw: Array(8760).fill(10) }
+    }
   }, null, 2));
 
   const [runUuid, setRunUuid] = useState(null);
