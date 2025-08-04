@@ -10,19 +10,24 @@ It includes:
 
 ### Backend
 
-```bash
-cd backend
-pip install -r requirements.txt
-python app.py
-```
+1. Create `backend/.env` containing a valid NREL API key:
 
-Set your API key in `backend/.env`:
+   ```
+   NREL_API_KEY=YOUR_REAL_NREL_KEY
+   ```
 
-```
-NREL_API_KEY=YOUR_REAL_NREL_KEY
-```
+2. Install requirements and start Flask on port 5000 (matching the React proxy):
+
+   ```bash
+   cd backend
+   pip install -r requirements.txt
+   python app.py
+   ```
 
 ### Frontend
+
+The React dev server proxies API calls to the Flask backend. Install dependencies
+and start it with:
 
 ```bash
 cd frontend

@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os, requests
 from dotenv import load_dotenv
+from werkzeug.exceptions import BadRequest
 
 load_dotenv()  # reads .env
 API_KEY = os.getenv("NREL_API_KEY")
@@ -18,34 +19,46 @@ CORS(app)  # allow React dev-server to call us
 
 @app.route("/submit", methods=["POST"])
 def submit():
-    scenario = request.json
+
+    """Validate and forward a scenario to NREL's API."""
+    if not request.is_json:
+        return jsonify({"error": "Request body must be JSON"}), 400
+    try:
+        scenario = request.get_json()
+    except BadRequest:
+        return jsonify({"error": "Malformed JSON in request"}), 400
+
     post_url = f"{API_URL}/job/?api_key={API_KEY}"
-    resp = None
     try:
         resp = requests.post(post_url, json={"Scenario": scenario})
         resp.raise_for_status()
         data = resp.json()
-        run_uuid = data["data"]["run_uuid"]
-    except (requests.exceptions.RequestException, KeyError) as e:
-        # Surface any error message from NREL or request issues
-        err_resp = getattr(e, "response", resp)
-        try:
-            err = err_resp.json()
-        except Exception:
-            err = getattr(err_resp, "text", str(e))
-        status = getattr(err_resp, "status_code", 500)
-        return jsonify({"error": err}), status
+
+    except requests.exceptions.RequestException as e:
+        # covers HTTPError and network issues
+        return jsonify({"error": str(e)}), 502
+    except ValueError:
+        return jsonify({"error": "Invalid JSON received from NREL API"}), 502
+
+    run_uuid = data.get("data", {}).get("run_uuid")
+    if not run_uuid:
+        return jsonify({"error": "run_uuid missing from NREL response"}), 502
 
     return jsonify({"run_uuid": run_uuid})
 
 @app.route("/status/<run_uuid>", methods=["GET"])
 def status(run_uuid):
-    job_url = f"{API_URL}/job/{run_uuid}/?api_key={API_KEY}"
-    resp = requests.get(job_url)
+
+    results_url = f"{API_URL}/job/{run_uuid}/results/?api_key={API_KEY}"
+
     try:
+        resp = requests.get(results_url)
         resp.raise_for_status()
-    except requests.exceptions.HTTPError:
-        return jsonify({"error": resp.json()}), resp.status_code
+        data = resp.json()
+    except requests.exceptions.RequestException as e:
+        return jsonify({"error": str(e)}), 502
+    except ValueError:
+        return jsonify({"error": "Invalid JSON received from NREL API"}), 502
 
     data = resp.json()
     if data.get("status") == "Completed":
