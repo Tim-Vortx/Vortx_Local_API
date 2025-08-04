@@ -18,6 +18,7 @@ function App() {
 
   const [runUuid, setRunUuid] = useState(null);
   const [status, setStatus] = useState("");
+  const [queue, setQueue] = useState(null);
   const [outputs, setOutputs] = useState(null);
   const [error, setError] = useState("");
 
@@ -32,10 +33,12 @@ function App() {
     }
 
     setStatus("Submitting…");
+
     try {
       const res = await fetch("/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+
         body: JSON.stringify(parsed)
       });
       if (!res.ok) {
@@ -51,6 +54,7 @@ function App() {
     } catch (e) {
       setError(e.message);
       setStatus("Error");
+
     }
   };
 

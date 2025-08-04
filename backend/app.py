@@ -19,6 +19,7 @@ CORS(app)  # allow React dev-server to call us
 
 @app.route("/submit", methods=["POST"])
 def submit():
+
     """Validate and forward a scenario to NREL's API."""
     if not request.is_json:
         return jsonify({"error": "Request body must be JSON"}), 400
@@ -32,6 +33,7 @@ def submit():
         resp = requests.post(post_url, json={"Scenario": scenario})
         resp.raise_for_status()
         data = resp.json()
+
     except requests.exceptions.RequestException as e:
         # covers HTTPError and network issues
         return jsonify({"error": str(e)}), 502
@@ -41,11 +43,14 @@ def submit():
     run_uuid = data.get("data", {}).get("run_uuid")
     if not run_uuid:
         return jsonify({"error": "run_uuid missing from NREL response"}), 502
+
     return jsonify({"run_uuid": run_uuid})
 
 @app.route("/status/<run_uuid>", methods=["GET"])
 def status(run_uuid):
+
     results_url = f"{API_URL}/job/{run_uuid}/results/?api_key={API_KEY}"
+
     try:
         resp = requests.get(results_url)
         resp.raise_for_status()
@@ -54,6 +59,16 @@ def status(run_uuid):
         return jsonify({"error": str(e)}), 502
     except ValueError:
         return jsonify({"error": "Invalid JSON received from NREL API"}), 502
+
+    data = resp.json()
+    if data.get("status") == "Completed":
+        results_url = f"{API_URL}/job/{run_uuid}/results/?api_key={API_KEY}"
+        results_resp = requests.get(results_url)
+        try:
+            results_resp.raise_for_status()
+        except requests.exceptions.HTTPError:
+            return jsonify({"error": results_resp.json()}), results_resp.status_code
+        data["outputs"] = results_resp.json().get("outputs")
 
     return jsonify(data)
 
