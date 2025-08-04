@@ -12,31 +12,49 @@ function App() {
 
   const [runUuid, setRunUuid] = useState(null);
   const [status, setStatus] = useState("");
+  const [queue, setQueue] = useState(null);
   const [outputs, setOutputs] = useState(null);
 
   const submit = async () => {
     setStatus("Submitting…");
-    const res = await fetch("/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: scenario
-    });
-    const { run_uuid } = await res.json();
-    setRunUuid(run_uuid);
-    setStatus("Queued: " + run_uuid);
+    setQueue(null);
+    try {
+      const res = await fetch("/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: scenario
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStatus("Error: " + JSON.stringify(data.error || data));
+        return;
+      }
+      setRunUuid(data.run_uuid);
+      setStatus("Queued");
+    } catch (e) {
+      setStatus("Error: " + e.message);
+    }
   };
 
   // poll every 5s once we have a runUuid
   useEffect(() => {
     if (!runUuid) return;
     const id = setInterval(async () => {
-      const res = await fetch(`/status/${runUuid}`);
-      const data = await res.json();
-      const s = data.data.status;
-      setStatus(s);
-      if (s === "Completed") {
-        clearInterval(id);
-        setOutputs(data.data.outputs);
+      try {
+        const res = await fetch(`/status/${runUuid}`);
+        const data = await res.json();
+        if (!res.ok) {
+          setStatus("Error: " + JSON.stringify(data.error || data));
+          return;
+        }
+        setStatus(data.status);
+        setQueue(data.queue);
+        if (data.status === "Completed") {
+          clearInterval(id);
+          setOutputs(data.outputs);
+        }
+      } catch (e) {
+        setStatus("Error: " + e.message);
       }
     }, 5000);
     return () => clearInterval(id);
@@ -52,7 +70,10 @@ function App() {
       />
       <br/>
       <button onClick={submit}>Run REopt</button>
-      <p>Status: {status}</p>
+      <p>
+        Status: {status}
+        {queue !== null && ` (Queue: ${queue})`}
+      </p>
       {outputs && (
         <pre style={{ background: "#f0f0f0", padding: 10 }}>
           {JSON.stringify(outputs, null, 2)}
