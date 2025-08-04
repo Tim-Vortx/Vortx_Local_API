@@ -9,7 +9,9 @@ if API_KEY is None:
     raise RuntimeError(
         "NREL_API_KEY is not set. Please define it in the environment or .env file."
     )
-BASE = "https://developer.nrel.gov/api/reopt/v3/job"
+
+# Root endpoint matches NREL's post_and_poll.py conventions
+API_URL = "https://developer.nrel.gov/api/reopt/v3"
 
 app = Flask(__name__)
 CORS(app)  # allow React dev-server to call us
@@ -17,8 +19,9 @@ CORS(app)  # allow React dev-server to call us
 @app.route("/submit", methods=["POST"])
 def submit():
     scenario = request.json
-    # wrap per v3 spec
-    resp = requests.post(f"{BASE}?api_key={API_KEY}", json={"Scenario": scenario})
+    # wrap per REopt v3 spec
+    post_url = f"{API_URL}/job/?api_key={API_KEY}"
+    resp = requests.post(post_url, json={"Scenario": scenario})
     try:
         resp.raise_for_status()
     except requests.exceptions.HTTPError:
@@ -29,7 +32,8 @@ def submit():
 
 @app.route("/status/<run_uuid>", methods=["GET"])
 def status(run_uuid):
-    resp = requests.get(f"{BASE}/{run_uuid}?api_key={API_KEY}")
+    results_url = f"{API_URL}/job/{run_uuid}/results/?api_key={API_KEY}"
+    resp = requests.get(results_url)
     try:
         resp.raise_for_status()
     except requests.exceptions.HTTPError:
