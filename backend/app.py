@@ -5,6 +5,10 @@ from dotenv import load_dotenv
 
 load_dotenv()  # reads .env
 API_KEY = os.getenv("NREL_API_KEY")
+if API_KEY is None:
+    raise RuntimeError(
+        "NREL_API_KEY is not set. Please define it in the environment or .env file."
+    )
 BASE = "https://developer.nrel.gov/api/reopt/v3/job"
 
 app = Flask(__name__)
