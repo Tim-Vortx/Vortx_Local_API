@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import minimalScenario from "./minimalScenario.json";
 
 function App() {
@@ -25,9 +25,15 @@ function App() {
   const [outputs, setOutputs] = useState(null);
   const [error, setError] = useState("");
 
-  // Max polling attempts and interval
-  const maxAttempts = 60; // e.g., 5 minutes max (60 * 5s)
-  const attemptsRef = useRef(0);
+  // Polling configuration
+  const baseDelay = parseInt(
+    process.env.REACT_APP_POLL_BASE_DELAY || "5000",
+    10
+  );
+  const maxWait = parseInt(
+    process.env.REACT_APP_MAX_POLL_TIME || String(5 * 60 * 1000),
+    10
+  );
 
   const submit = async () => {
     setError("");
@@ -40,8 +46,6 @@ function App() {
     }
 
     setStatus("Submitting…");
-    attemptsRef.current = 0; // reset attempts on new submit
-
     try {
       const res = await fetch("/submit", {
         method: "POST",
@@ -64,45 +68,55 @@ function App() {
     }
   };
 
-  // poll every 5s once we have a runUuid
+  // Poll for status with backoff once we have a runUuid
   useEffect(() => {
     if (!runUuid) return;
-    const id = setInterval(async () => {
-      if (attemptsRef.current >= maxAttempts) {
-        setError("Polling timed out after 5 minutes.");
+
+    let delay = baseDelay;
+    let timeoutId;
+    const startTime = Date.now();
+
+    const poll = async () => {
+      if (Date.now() - startTime >= maxWait) {
+        setError(`Polling timed out after ${Math.round(maxWait / 1000)} seconds.`);
         setStatus("Timeout");
-        clearInterval(id);
         return;
       }
-      attemptsRef.current += 1;
 
       try {
         const res = await fetch(`/status/${runUuid}`);
         if (!res.ok) {
           const err = await res.json();
           setError(err.error || res.statusText);
-          clearInterval(id);
           return;
         }
         const data = await res.json();
         console.log("Polling response:", data); // Log full response for debugging
 
-        // Safely access status
         const s = data?.status || data?.data?.status || "";
         setStatus(s);
 
         if (s === "Completed") {
-          clearInterval(id);
-          // Safely access outputs
           setOutputs(data?.outputs || data?.data?.outputs || null);
+          return;
+        }
+
+        if (s === "Queued" || s === "Running") {
+          delay = Math.min(delay * 2, maxWait);
+        } else {
+          delay = baseDelay;
         }
       } catch (e) {
         setError(e.message);
-        clearInterval(id);
+        return;
       }
-    }, 5000);
-    return () => clearInterval(id);
-  }, [runUuid]);
+
+      timeoutId = setTimeout(poll, delay);
+    };
+
+    timeoutId = setTimeout(poll, delay);
+    return () => clearTimeout(timeoutId);
+  }, [runUuid, baseDelay, maxWait]);
 
   return (
     <div style={{ padding: 20, fontFamily: "sans-serif" }}>
