@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 from werkzeug.exceptions import BadRequest
 import time
+import re
 
 # Track temporary cooldowns for run_uuids after hitting rate limits
 cooldowns = {}
@@ -28,6 +29,12 @@ if API_KEY is None:
 
 # Root endpoint matches NREL's post_and_poll.py conventions
 API_URL = "https://developer.nrel.gov/api/reopt/v3"
+HEADERS = {"User-Agent": "VortxOpt/1.0", "Accept": "application/json"}
+
+
+def _extract_support_id(body: str) -> str | None:
+    match = re.search(r"support ID is: (\d+)", body, re.IGNORECASE)
+    return match.group(1) if match else None
 
 app = Flask(__name__)
 CORS(app)  # allow React dev-server to call us
@@ -48,7 +55,7 @@ def submit():
 
     post_url = f"{API_URL}/job?api_key={API_KEY}"
     try:
-        resp = requests.post(post_url, json=scenario)
+        resp = requests.post(post_url, json=scenario, headers=HEADERS)
         resp.raise_for_status()
         data = resp.json()
     except requests.exceptions.HTTPError as e:
@@ -95,7 +102,7 @@ def status(run_uuid):
     logging.info(f"Requesting results from {results_url}")
 
     try:
-        resp = requests.get(results_url)
+        resp = requests.get(results_url, headers=HEADERS)
         logging.info(
             f"/results response status {resp.status_code} for run_uuid {run_uuid}"
         )
@@ -138,7 +145,7 @@ def status(run_uuid):
                     logging.info(
                         f"Job status attempt {attempt + 1}/{max_retries} for run_uuid {run_uuid}"
                     )
-                    job_resp = requests.get(job_url)
+                    job_resp = requests.get(job_url, headers=HEADERS)
                     logging.info(
                         f"Job status response {job_resp.status_code} for run_uuid {run_uuid}"
                     )
@@ -146,6 +153,11 @@ def status(run_uuid):
                         logging.warning(
                             f"Job status response body: {job_resp.text}"
                         )
+                        support_id = _extract_support_id(job_resp.text)
+                        if support_id:
+                            logging.warning(
+                                f"Job status support ID: {support_id}"
+                            )
                     job_resp.raise_for_status()
                     job_data = job_resp.json()
                     status = job_data.get("status")
@@ -178,17 +190,20 @@ def status(run_uuid):
                 except (requests.exceptions.RequestException, Exception) as job_e:
                     status_code = getattr(job_resp, "status_code", "N/A")
                     last_body = getattr(job_resp, "text", "")
+                    last_support_id = _extract_support_id(last_body)
                     if attempt >= max_retries - 1 or total_wait >= max_total_wait:
                         logging.error(
-                            "Error fetching job status after /results 400: %s; last response body: %s",
+                            "Error fetching job status after /results 400: %s; last response body: %s; support_id=%s",
                             job_e,
                             last_body,
+                            last_support_id,
                         )
                         return (
                             jsonify(
                                 {
                                     "error": f"Job failed and could not fetch job status: {job_e}",
                                     "status_code": status_code,
+                                    "support_id": last_support_id,
                                 }
                             ),
                             502,
