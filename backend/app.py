@@ -42,7 +42,7 @@ def submit():
         logging.error(f"Malformed JSON in request: {e}")
         return jsonify({"error": "Malformed JSON in request"}), 400
 
-    post_url = f"{API_URL}/job/?api_key={API_KEY}"
+    post_url = f"{API_URL}/job?api_key={API_KEY}"
     try:
         resp = requests.post(post_url, json=scenario)
         resp.raise_for_status()
@@ -72,7 +72,7 @@ def submit():
 def status(run_uuid):
 
     import time
-    results_url = f"{API_URL}/job/{run_uuid}/results/?api_key={API_KEY}"
+    results_url = f"{API_URL}/job/{run_uuid}/results?api_key={API_KEY}"
     logging.info(f"Polling status for run_uuid: {run_uuid}")
 
     try:
@@ -82,7 +82,7 @@ def status(run_uuid):
     except requests.exceptions.HTTPError as e:
         # If 400 error from /results, fetch job status for more info
         if resp.status_code == 400:
-            job_url = f"{API_URL}/job/{run_uuid}/?api_key={API_KEY}"
+            job_url = f"{API_URL}/job/{run_uuid}?api_key={API_KEY}"
             max_retries = 10
             for attempt in range(max_retries):
                 try:
