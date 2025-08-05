@@ -52,24 +52,18 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(parsed),
       });
+      const text = await res.text();
+      let data = null;
+      try {
+        data = JSON.parse(text);
+      } catch {}
       if (!res.ok) {
-        let message = res.statusText;
-        try {
-          const err = await res.json();
-          message = err.error || message;
-        } catch {
-          const text = await res.text();
-          if (text) message = text;
-        }
+        const message = (data && data.error) || text || res.statusText;
         setError(message);
         setStatus("Error");
         return;
       }
-      let data;
-      try {
-        data = await res.json();
-      } catch {
-        const text = await res.text();
+      if (!data) {
         setError(text || "Invalid JSON response");
         setStatus("Error");
         return;
@@ -101,24 +95,18 @@ function App() {
 
       try {
         const res = await fetch(`/status/${runUuid}`);
+        const text = await res.text();
+        let data = null;
+        try {
+          data = JSON.parse(text);
+        } catch {}
         if (!res.ok) {
-          let message = res.statusText;
-          try {
-            const err = await res.json();
-            message = err.error || message;
-          } catch {
-            const text = await res.text();
-            if (text) message = text;
-          }
+          const message = (data && data.error) || text || res.statusText;
           setError(message);
           setStatus("Error");
           return;
         }
-        let data;
-        try {
-          data = await res.json();
-        } catch {
-          const text = await res.text();
+        if (!data) {
           setError(text || "Invalid JSON response");
           setStatus("Error");
           return;
