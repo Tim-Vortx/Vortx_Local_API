@@ -53,12 +53,28 @@ function App() {
         body: JSON.stringify(parsed),
       });
       if (!res.ok) {
-        const err = await res.json();
-        setError(err.error || res.statusText);
+        let message = res.statusText;
+        try {
+          const err = await res.json();
+          message = err.error || message;
+        } catch {
+          const text = await res.text();
+          if (text) message = text;
+        }
+        setError(message);
         setStatus("Error");
         return;
       }
-      const { run_uuid } = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        const text = await res.text();
+        setError(text || "Invalid JSON response");
+        setStatus("Error");
+        return;
+      }
+      const { run_uuid } = data;
       setRunUuid(run_uuid);
       setOutputs(null);
       setStatus("Queued: " + run_uuid);
@@ -86,11 +102,27 @@ function App() {
       try {
         const res = await fetch(`/status/${runUuid}`);
         if (!res.ok) {
-          const err = await res.json();
-          setError(err.error || res.statusText);
+          let message = res.statusText;
+          try {
+            const err = await res.json();
+            message = err.error || message;
+          } catch {
+            const text = await res.text();
+            if (text) message = text;
+          }
+          setError(message);
+          setStatus("Error");
           return;
         }
-        const data = await res.json();
+        let data;
+        try {
+          data = await res.json();
+        } catch {
+          const text = await res.text();
+          setError(text || "Invalid JSON response");
+          setStatus("Error");
+          return;
+        }
         console.log("Polling response:", data); // Log full response for debugging
 
         const s = data?.status || data?.data?.status || "";
