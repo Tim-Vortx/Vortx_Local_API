@@ -199,13 +199,21 @@ def status(run_uuid):
         return jsonify({"error": error_message, "status": status}), 200
 
     if status == "Completed":
-        results_resp = requests.get(results_url)
-        try:
-            results_resp.raise_for_status()
-        except requests.exceptions.HTTPError as e:
-            logging.error(f"HTTP error getting results from NREL API: {e}")
-            return jsonify({"error": results_resp.json()}), results_resp.status_code
-        data["outputs"] = results_resp.json().get("outputs")
+        outputs = data.get("outputs")
+        if outputs is None:
+            logging.error(
+                f"NREL API indicated completion but no outputs were returned for run_uuid {run_uuid}"
+            )
+            return (
+                jsonify(
+                    {
+                        "error": "Outputs missing from NREL response",
+                        "status": status,
+                    }
+                ),
+                502,
+            )
+        data["outputs"] = outputs
 
     return jsonify(data)
 
