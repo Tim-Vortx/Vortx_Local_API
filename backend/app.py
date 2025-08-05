@@ -84,7 +84,12 @@ def status(run_uuid):
         if resp.status_code == 400:
             job_url = f"{API_URL}/job/{run_uuid}?api_key={API_KEY}"
             max_retries = 10
+            backoff = 1  # seconds
+            max_backoff = 30
+            max_total_wait = 60
+            total_wait = 0
             for attempt in range(max_retries):
+                job_resp = None
                 try:
                     job_resp = requests.get(job_url)
                     job_resp.raise_for_status()
@@ -116,16 +121,31 @@ def status(run_uuid):
 
                     # Fallback for any other unexpected status
                     return jsonify({"status": status, "job": job_data}), 200
-                except requests.exceptions.HTTPError as job_e:
-                    if job_resp.status_code == 404 and attempt < max_retries - 1:
-                        logging.warning(f"Job status 404 for run_uuid {run_uuid}, retrying ({attempt+1}/{max_retries})...")
-                        time.sleep(3)
-                        continue
-                    logging.error(f"Error fetching job status after /results 400: {job_e}")
-                    return jsonify({"error": f"Job failed and could not fetch job status: {job_e}"}), 502
-                except Exception as job_e:
-                    logging.error(f"Error fetching job status after /results 400: {job_e}")
-                    return jsonify({"error": f"Job failed and could not fetch job status: {job_e}"}), 502
+                except (requests.exceptions.RequestException, Exception) as job_e:
+                    status_code = getattr(job_resp, "status_code", "N/A")
+                    if attempt >= max_retries - 1 or total_wait >= max_total_wait:
+                        logging.error(
+                            f"Error fetching job status after /results 400: {job_e}"
+                        )
+                        return (
+                            jsonify(
+                                {
+                                    "error": f"Job failed and could not fetch job status: {job_e}",
+                                    "status_code": status_code,
+                                }
+                            ),
+                            502,
+                        )
+
+                    delay = min(backoff, max_total_wait - total_wait)
+                    logging.warning(
+                        f"Job status check failed (status {status_code}) for run_uuid {run_uuid}; "
+                        f"retry {attempt + 1}/{max_retries} in {delay} seconds."
+                    )
+                    time.sleep(delay)
+                    total_wait += delay
+                    backoff = min(backoff * 2, max_backoff)
+                    continue
         logging.error(f"Request exception from NREL API: {e}")
         return jsonify({"error": str(e)}), 502
     except requests.exceptions.RequestException as e:
