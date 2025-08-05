@@ -92,9 +92,15 @@ def status(run_uuid):
 
     results_url = f"{API_URL}/job/{run_uuid}/results?api_key={API_KEY}"
     logging.info(f"Polling status for run_uuid: {run_uuid}")
+    logging.info(f"Requesting results from {results_url}")
 
     try:
         resp = requests.get(results_url)
+        logging.info(
+            f"/results response status {resp.status_code} for run_uuid {run_uuid}"
+        )
+        if resp.status_code != 200:
+            logging.warning(f"/results response body: {resp.text}")
         resp.raise_for_status()
         data = resp.json()
     except requests.exceptions.HTTPError as e:
@@ -116,7 +122,11 @@ def status(run_uuid):
             )
         # If 400 error from /results, fetch job status for more info
         if resp.status_code == 400:
+            logging.warning(
+                f"/results returned 400 for run_uuid {run_uuid}: {resp.text}"
+            )
             job_url = f"{API_URL}/job/{run_uuid}?api_key={API_KEY}"
+            logging.info(f"Fetching job status from {job_url}")
             max_retries = 10
             backoff = 1  # seconds
             max_backoff = 30
@@ -125,7 +135,17 @@ def status(run_uuid):
             for attempt in range(max_retries):
                 job_resp = None
                 try:
+                    logging.info(
+                        f"Job status attempt {attempt + 1}/{max_retries} for run_uuid {run_uuid}"
+                    )
                     job_resp = requests.get(job_url)
+                    logging.info(
+                        f"Job status response {job_resp.status_code} for run_uuid {run_uuid}"
+                    )
+                    if job_resp.status_code != 200:
+                        logging.warning(
+                            f"Job status response body: {job_resp.text}"
+                        )
                     job_resp.raise_for_status()
                     job_data = job_resp.json()
                     status = job_data.get("status")
@@ -157,9 +177,12 @@ def status(run_uuid):
                     return jsonify({"status": status, "job": job_data}), 200
                 except (requests.exceptions.RequestException, Exception) as job_e:
                     status_code = getattr(job_resp, "status_code", "N/A")
+                    last_body = getattr(job_resp, "text", "")
                     if attempt >= max_retries - 1 or total_wait >= max_total_wait:
                         logging.error(
-                            f"Error fetching job status after /results 400: {job_e}"
+                            "Error fetching job status after /results 400: %s; last response body: %s",
+                            job_e,
+                            last_body,
                         )
                         return (
                             jsonify(
@@ -181,7 +204,12 @@ def status(run_uuid):
                     backoff = min(backoff * 2, max_backoff)
                     continue
 
-        logging.error(f"Request exception from NREL API: {e}")
+        logging.error(
+            "Request exception from NREL API: %s; status=%s body=%s",
+            e,
+            getattr(resp, "status_code", "N/A"),
+            getattr(resp, "text", ""),
+        )
         return jsonify({"error": str(e)}), 502
     except requests.exceptions.RequestException as e:
         logging.error(f"Request exception from NREL API: {e}")
