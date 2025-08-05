@@ -36,3 +36,12 @@ npm start
 ```
 
 With both services running, open your browser at `http://localhost:3000` to try the app.
+
+### Frontend environment variables
+
+The polling behavior in the React app can be tuned with the following variables (defaults in parentheses):
+
+- `REACT_APP_POLL_BASE_DELAY` – initial polling delay in milliseconds (5000)
+- `REACT_APP_MAX_POLL_TIME` – maximum total time to poll before giving up in milliseconds (300000)
+
+These can be set in a `.env` file inside the `frontend` directory if needed.
