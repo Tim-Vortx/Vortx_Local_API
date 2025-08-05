@@ -1,26 +1,33 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import minimalScenario from "./minimalScenario.json";
 
 function App() {
-  // put a valid 8760‐hr load or your own Scenario here
-  const [scenario, setScenario] = useState(
-    JSON.stringify(
-      {
-        Site: {
-          latitude: 40,
-          longitude: -105,
-          ElectricLoad: { loads_kw: Array(8760).fill(10) }
-        }
+  // Generate 8760 hourly load values
+  const hourlyLoads = Array(8760).fill(10);
+
+  // Initialize scenario state as stringified JSON with minimalScenario but replace loads_kw with full year hourly loads
+  const initialScenario = JSON.stringify(
+    {
+      ...minimalScenario,
+      ElectricLoad: {
+        loads_kw: hourlyLoads,
       },
-      null,
-      2
-    )
+    },
+    null,
+    2
   );
+
+  const [scenario, setScenario] = useState(initialScenario);
 
   const [runUuid, setRunUuid] = useState(null);
   const [status, setStatus] = useState("");
   const [queue, setQueue] = useState(null);
   const [outputs, setOutputs] = useState(null);
   const [error, setError] = useState("");
+
+  // Max polling attempts and interval
+  const maxAttempts = 60; // e.g., 5 minutes max (60 * 5s)
+  const attemptsRef = useRef(0);
 
   const submit = async () => {
     setError("");
@@ -33,13 +40,13 @@ function App() {
     }
 
     setStatus("Submitting…");
+    attemptsRef.current = 0; // reset attempts on new submit
 
     try {
       const res = await fetch("/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-
-        body: JSON.stringify(parsed)
+        body: JSON.stringify(parsed),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -54,7 +61,6 @@ function App() {
     } catch (e) {
       setError(e.message);
       setStatus("Error");
-
     }
   };
 
@@ -62,6 +68,14 @@ function App() {
   useEffect(() => {
     if (!runUuid) return;
     const id = setInterval(async () => {
+      if (attemptsRef.current >= maxAttempts) {
+        setError("Polling timed out after 5 minutes.");
+        setStatus("Timeout");
+        clearInterval(id);
+        return;
+      }
+      attemptsRef.current += 1;
+
       try {
         const res = await fetch(`/status/${runUuid}`);
         if (!res.ok) {
@@ -71,11 +85,16 @@ function App() {
           return;
         }
         const data = await res.json();
-        const s = data.data.status;
+        console.log("Polling response:", data); // Log full response for debugging
+
+        // Safely access status
+        const s = data?.status || data?.data?.status || "";
         setStatus(s);
+
         if (s === "Completed") {
           clearInterval(id);
-          setOutputs(data.data.outputs);
+          // Safely access outputs
+          setOutputs(data?.outputs || data?.data?.outputs || null);
         }
       } catch (e) {
         setError(e.message);
@@ -91,7 +110,7 @@ function App() {
       <textarea
         style={{ width: "100%", height: 200 }}
         value={scenario}
-        onChange={e => setScenario(e.target.value)}
+        onChange={(e) => setScenario(e.target.value)}
       />
       <br />
       <button onClick={submit}>Run REopt</button>
