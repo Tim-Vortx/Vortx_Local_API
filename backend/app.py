@@ -12,6 +12,10 @@ import os, requests
 from dotenv import load_dotenv
 from pathlib import Path
 from werkzeug.exceptions import BadRequest
+import time
+
+# Track temporary cooldowns for run_uuids after hitting rate limits
+cooldowns = {}
 
 dotenv_path = Path(__file__).resolve().parent / ".env"
 load_dotenv(dotenv_path=dotenv_path, override=True)  # reads .env
@@ -71,7 +75,21 @@ def submit():
 @app.route("/status/<run_uuid>", methods=["GET"])
 def status(run_uuid):
 
-    import time
+    now = time.time()
+    cooldown_until = cooldowns.get(run_uuid)
+    if cooldown_until and now < cooldown_until:
+        retry_after = int(cooldown_until - now)
+        return (
+            jsonify(
+                {
+                    "error": "Polling too frequently. Please retry later.",
+                    "retry_after": retry_after,
+                }
+            ),
+            429,
+            {"Retry-After": str(retry_after)},
+        )
+
     results_url = f"{API_URL}/job/{run_uuid}/results?api_key={API_KEY}"
     logging.info(f"Polling status for run_uuid: {run_uuid}")
 
@@ -80,6 +98,22 @@ def status(run_uuid):
         resp.raise_for_status()
         data = resp.json()
     except requests.exceptions.HTTPError as e:
+        if resp.status_code == 429:
+            retry_after = int(resp.headers.get("Retry-After", "60"))
+            cooldowns[run_uuid] = time.time() + retry_after
+            logging.warning(
+                f"NREL API rate limit hit for run_uuid {run_uuid}, retry after {retry_after}s"
+            )
+            return (
+                jsonify(
+                    {
+                        "error": "Too Many Requests",
+                        "retry_after": retry_after,
+                    }
+                ),
+                429,
+                {"Retry-After": str(retry_after)},
+            )
         # If 400 error from /results, fetch job status for more info
         if resp.status_code == 400:
             job_url = f"{API_URL}/job/{run_uuid}?api_key={API_KEY}"
@@ -146,6 +180,7 @@ def status(run_uuid):
                     total_wait += delay
                     backoff = min(backoff * 2, max_backoff)
                     continue
+
         logging.error(f"Request exception from NREL API: {e}")
         return jsonify({"error": str(e)}), 502
     except requests.exceptions.RequestException as e:
