@@ -10,10 +10,13 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os, requests
 from dotenv import load_dotenv
+from pathlib import Path
 from werkzeug.exceptions import BadRequest
 
-load_dotenv()  # reads .env
+dotenv_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=dotenv_path, override=True)  # reads .env
 API_KEY = os.getenv("NREL_API_KEY")
+logging.info(f"NREL_API_KEY loaded: {API_KEY}")  # debug loaded key
 if API_KEY is None:
     raise RuntimeError(
         "NREL_API_KEY is not set. Please define it in the environment or .env file."
@@ -129,4 +132,4 @@ def status(run_uuid):
     return jsonify(data)
 
 if __name__ == "__main__":
-    app.run(port=5001, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
