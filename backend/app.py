@@ -90,9 +90,32 @@ def status(run_uuid):
                     job_resp.raise_for_status()
                     job_data = job_resp.json()
                     status = job_data.get("status")
-                    error_message = job_data.get("message", f"Job failed with status: {status}")
-                    logging.error(f"NREL job {run_uuid} failed: {error_message}")
-                    return jsonify({"error": error_message, "status": status, "job": job_data}), 200
+
+                    # If job is still processing, return status without logging an error
+                    if status in ["Queued", "Running"]:
+                        return jsonify({"status": status, "job": job_data}), 200
+
+                    # Only log errors for terminal failure states
+                    if status in ["Failed", "Error", "Cancelled"]:
+                        error_message = job_data.get(
+                            "message", f"Job failed with status: {status}"
+                        )
+                        logging.error(
+                            f"NREL job {run_uuid} failed: {error_message}"
+                        )
+                        return (
+                            jsonify(
+                                {
+                                    "error": error_message,
+                                    "status": status,
+                                    "job": job_data,
+                                }
+                            ),
+                            200,
+                        )
+
+                    # Fallback for any other unexpected status
+                    return jsonify({"status": status, "job": job_data}), 200
                 except requests.exceptions.HTTPError as job_e:
                     if job_resp.status_code == 404 and attempt < max_retries - 1:
                         logging.warning(f"Job status 404 for run_uuid {run_uuid}, retrying ({attempt+1}/{max_retries})...")
