@@ -28,8 +28,13 @@ if API_KEY is None:
     )
 
 # Root endpoint matches NREL's post_and_poll.py conventions
-API_URL = "https://developer.nrel.gov/api/reopt/v3"
-HEADERS = {"User-Agent": "VortxOpt/1.0", "Accept": "application/json"}
+API_URL = "https://developer.nrel.gov/api/reopt/v3/"
+HEADERS = {
+  "User-Agent":     "VortxOpt/1.0",
+  "Accept":         "application/json",
+  "Content-Type":   "application/json",
+  "X-Api-Key":      API_KEY,
+}
 
 
 def _extract_support_id(body: str) -> str | None:
@@ -53,7 +58,7 @@ def submit():
         logging.error(f"Malformed JSON in request: {e}")
         return jsonify({"error": "Malformed JSON in request"}), 400
 
-    post_url = f"{API_URL}/job?api_key={API_KEY}"
+    post_url = f"{API_URL}job/"
     try:
         resp = requests.post(post_url, json=scenario, headers=HEADERS)
         resp.raise_for_status()
@@ -97,7 +102,7 @@ def status(run_uuid):
             {"Retry-After": str(retry_after)},
         )
 
-    results_url = f"{API_URL}/job/{run_uuid}/results?api_key={API_KEY}"
+    results_url = f"{API_URL}job/{run_uuid}/results/"
     logging.info(f"Polling status for run_uuid: {run_uuid}")
     logging.info(f"Requesting results from {results_url}")
 
