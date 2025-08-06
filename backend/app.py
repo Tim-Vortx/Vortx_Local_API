@@ -12,6 +12,7 @@ import requests
 from werkzeug.exceptions import BadRequest
 import time
 import re
+import json
 
 # Track temporary cooldowns for run_uuids after hitting rate limits
 cooldowns = {}
@@ -21,6 +22,24 @@ API_URL = "https://developer.nrel.gov/api/reopt/v3/"
 def _extract_support_id(body: str) -> str | None:
     match = re.search(r"support ID is: (\d+)", body, re.IGNORECASE)
     return match.group(1) if match else None
+
+
+def _redact_api_key(data):
+    """Remove the api_key field from dicts or JSON strings."""
+    if isinstance(data, dict):
+        return {k: v for k, v in data.items() if k != "api_key"}
+    if isinstance(data, str):
+        try:
+            parsed = json.loads(data)
+        except ValueError:
+            text = re.sub(r'"api_key"\s*:\s*"[^"\\]*",\s*', "", data)
+            text = re.sub(r',\s*"api_key"\s*:\s*"[^"\\]*"', "", text)
+            text = re.sub(r'"api_key"\s*:\s*"[^"\\]*"', "", text)
+            return text
+        else:
+            redacted = _redact_api_key(parsed)
+            return json.dumps(redacted)
+    return data
 
 app = Flask(__name__)
 CORS(app)  # allow React dev-server to call us
@@ -54,7 +73,7 @@ def submit():
         resp = requests.post(post_url, json=scenario, headers=headers)
         resp.raise_for_status()
         data = resp.json()
-        logging.info(f"Submit response from NREL: {data}")
+        logging.info("Submit response from NREL: %s", _redact_api_key(data))
     except requests.exceptions.HTTPError as e:
         if resp.status_code == 400:
             error_detail = resp.text
@@ -112,7 +131,7 @@ def status(run_uuid):
         resp = requests.get(results_url, headers=headers)
         logging.info(f"/results response status {resp.status_code} for run_uuid {run_uuid}")
         if resp.status_code != 200:
-            logging.warning(f"/results response body: {resp.text}")
+            logging.warning("/results response body: %s", _redact_api_key(resp.text))
         resp.raise_for_status()
         data = resp.json()
     except requests.exceptions.HTTPError as e:
@@ -126,14 +145,14 @@ def status(run_uuid):
                 {"Retry-After": str(retry_after)},
             )
         if resp.status_code == 400:
-            error_detail = resp.text
-            logging.error(f"NREL API 400 Bad Request from /results: {error_detail}")
+            error_detail = _redact_api_key(resp.text)
+            logging.error("NREL API 400 Bad Request from /results: %s", error_detail)
             return jsonify({"error": "Bad Request from NREL API", "details": error_detail}), 400
         logging.error(
             "HTTP error from NREL API on results: %s; status=%s body=%s",
             e,
             getattr(resp, "status_code", "N/A"),
-            getattr(resp, "text", ""),
+            _redact_api_key(getattr(resp, "text", "")),
         )
         return jsonify({"error": str(e)}), 502
     except requests.exceptions.RequestException as e:
