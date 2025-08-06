@@ -37,6 +37,8 @@ function App() {
 
   const submit = async () => {
     setError("");
+    setOutputs(null);
+    setRunUuid(null);
     let parsed;
     try {
       parsed = JSON.parse(scenario);
@@ -49,7 +51,11 @@ function App() {
     try {
       const res = await fetch("/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // forward your real key
+          "X-Api-Key": process.env.REACT_APP_NREL_API_KEY,
+        },
         body: JSON.stringify(parsed),
       });
       const text = await res.text();
@@ -68,6 +74,7 @@ function App() {
         setStatus("Error");
         return;
       }
+      console.log("Submit response:", data);
       const { run_uuid } = data;
       setRunUuid(run_uuid);
       setOutputs(null);
@@ -94,7 +101,11 @@ function App() {
       }
 
       try {
-        const res = await fetch(`/status/${runUuid}`);
+        const res = await fetch(`/status/${runUuid}`, {
+          headers: {
+            "X-Api-Key": process.env.REACT_APP_NREL_API_KEY,
+          },
+        });
         const text = await res.text();
         let data = null;
         try {
@@ -116,16 +127,14 @@ function App() {
         const s = data?.status || data?.data?.status || "";
         setStatus(s);
 
-        if (s === "Completed") {
+        // Bail out on either optimal (v2) or Completed (v3) status
+        if (["optimal", "completed"].includes(s.toLowerCase())) {
           setOutputs(data?.outputs || data?.data?.outputs || null);
           return;
         }
 
-        if (s === "Queued" || s === "Running") {
-          delay = Math.min(delay * 2, maxWait);
-        } else {
-          delay = baseDelay;
-        }
+        // Always apply exponential backoff up to maxWait to avoid excessive polling
+        delay = Math.min(delay * 2, maxWait);
       } catch (e) {
         setError(e.message);
         return;
