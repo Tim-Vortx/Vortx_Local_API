@@ -18,14 +18,14 @@ import requests
 DEFAULT_API_URL = "https://developer.nrel.gov/api/reopt/stable"
 
 
-def _poll_results(url: str, poll_interval: int = 5) -> Dict[str, Any]:
+def _poll_results(url: str, poll_interval: int = 5, headers: Dict[str, str] | None = None) -> Dict[str, Any]:
     """Poll the REopt results endpoint until a terminal status is returned.
 
     Parameters
     ----------
     url : str
         Fully-qualified URL to the ``/results`` endpoint including the
-        ``run_uuid`` and ``api_key`` query parameter.
+        ``run_uuid``.
     poll_interval : int, optional
         Seconds to wait between polling attempts, by default 5.
 
@@ -38,7 +38,7 @@ def _poll_results(url: str, poll_interval: int = 5) -> Dict[str, Any]:
 
     status = "Optimizing..."
     while status == "Optimizing...":
-        resp = requests.get(url, verify=False)
+        resp = requests.get(url, headers=headers, verify=False)
         resp.raise_for_status()
         data = resp.json()
         # v3 places the status at the top level
@@ -96,13 +96,14 @@ def get_api_results(
     of the values that were originally sent.
     """
 
-    post_url = f"{api_url}/job/?api_key={api_key}"
-    resp = requests.post(post_url, json=post, verify=False)
+    post_url = f"{api_url}/job/"
+    headers = {"X-Api-Key": api_key}
+    resp = requests.post(post_url, json=post, headers=headers, verify=False)
     resp.raise_for_status()
     run_uuid = resp.json()["run_uuid"]
 
-    results_url = f"{api_url}/job/{run_uuid}/results/?api_key={api_key}"
-    results = _poll_results(results_url, poll_interval=poll_interval)
+    results_url = f"{api_url}/job/{run_uuid}/results/"
+    results = _poll_results(results_url, poll_interval=poll_interval, headers=headers)
 
     sent_inputs = post
     received_inputs = results.get("inputs", {})

@@ -8,9 +8,7 @@ logging.basicConfig(
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import os, requests
-from dotenv import load_dotenv
-from pathlib import Path
+import requests
 from werkzeug.exceptions import BadRequest
 import time
 import re
@@ -18,22 +16,7 @@ import re
 # Track temporary cooldowns for run_uuids after hitting rate limits
 cooldowns = {}
 
-dotenv_path = Path(__file__).resolve().parent / ".env"
-load_dotenv(dotenv_path=dotenv_path, override=True)  # reads .env
-API_KEY = os.getenv("NREL_API_KEY")
-logging.info(f"NREL_API_KEY loaded: {API_KEY}")  # debug loaded key
-if API_KEY is None:
-    raise RuntimeError(
-        "NREL_API_KEY is not set. Please define it in the environment or .env file."
-    )
-
-# Root endpoint matches NREL's post_and_poll.py conventions
 API_URL = "https://developer.nrel.gov/api/reopt/v3/"
-
-def _get_api_key():
-    # 1) look for header from React
-    # 2) fall back to your old env var
-    return request.headers.get("X-Api-Key") or os.getenv("NREL_API_KEY")
 
 def _extract_support_id(body: str) -> str | None:
     match = re.search(r"support ID is: (\d+)", body, re.IGNORECASE)
@@ -55,13 +38,18 @@ def submit():
         logging.error(f"Malformed JSON in request: {e}")
         return jsonify({"error": "Malformed JSON in request"}), 400
 
-    post_url = f"{API_URL}job/?api_key={_get_api_key()}"
+    api_key = request.headers.get("X-Api-Key")
+    logging.info(f"X-Api-Key header present: {api_key is not None}")
+    if not api_key:
+        return jsonify({"error": "Missing X-Api-Key header"}), 401
+
+    post_url = f"{API_URL}job/"
     try:
         headers = {
             "User-Agent":   "VortxOpt/1.0",
             "Accept":       "application/json",
             "Content-Type": "application/json",
-            "X-Api-Key":    _get_api_key(),
+            "X-Api-Key":    api_key,
         }
         resp = requests.post(post_url, json=scenario, headers=headers)
         resp.raise_for_status()
@@ -106,7 +94,12 @@ def status(run_uuid):
             {"Retry-After": str(retry_after)},
         )
 
-    results_url = f"{API_URL}job/{run_uuid}/results/?api_key={_get_api_key()}"
+    api_key = request.headers.get("X-Api-Key")
+    logging.info(f"X-Api-Key header present: {api_key is not None}")
+    if not api_key:
+        return jsonify({"error": "Missing X-Api-Key header"}), 401
+
+    results_url = f"{API_URL}job/{run_uuid}/results/"
     logging.info(f"Polling status for run_uuid: {run_uuid}")
     logging.info(f"Requesting results from {results_url}")
 
@@ -114,7 +107,7 @@ def status(run_uuid):
         headers = {
             "User-Agent":   "VortxOpt/1.0",
             "Accept":       "application/json",
-            "X-Api-Key":    _get_api_key(),
+            "X-Api-Key":    api_key,
         }
         resp = requests.get(results_url, headers=headers)
         logging.info(f"/results response status {resp.status_code} for run_uuid {run_uuid}")
