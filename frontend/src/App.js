@@ -5,11 +5,13 @@ function App() {
   // Generate 8760 hourly load values
   const hourlyLoads = Array(8760).fill(10);
 
-  // Initialize scenario state as stringified JSON with minimalScenario but replace loads_kw with full year hourly loads
+  // Initialize scenario state as stringified JSON with minimalScenario but replace
+  // loads_kw with full year hourly loads and include a specific year
   const initialScenario = JSON.stringify(
     {
       ...minimalScenario,
       ElectricLoad: {
+        year: 2017,
         loads_kw: hourlyLoads,
       },
     },
@@ -45,6 +47,14 @@ function App() {
     } catch (e) {
       setError("Scenario JSON is invalid: " + e.message);
       return;
+    }
+
+    // Ensure the scenario includes a numeric year for ElectricLoad
+    if (!parsed.ElectricLoad) {
+      parsed.ElectricLoad = {};
+    }
+    if (typeof parsed.ElectricLoad.year !== "number") {
+      parsed.ElectricLoad.year = 2017;
     }
 
     setStatus("Submitting…");
