@@ -93,6 +93,53 @@ function extractTimeSeries(outputs) {
   return series;
 }
 
+// Parse an uploaded CSV containing hourly (8760) or 15-min (35040)
+// kW load values. Optionally the first column may contain timestamps
+// from which a year will be extracted.
+function parseLoadCsv(text) {
+  const lines = text
+    .trim()
+    .split(/\r?\n/)
+    .filter((l) => l.trim());
+  let year = 2017;
+  const values = [];
+  for (const line of lines) {
+    const parts = line.split(/,|\s+/).filter(Boolean);
+    if (!parts.length) continue;
+    const maybeDate = parts[0];
+    const maybeVal = parts.length > 1 ? parts[1] : parts[0];
+    const num = parseFloat(maybeVal);
+    if (!isNaN(num)) {
+      values.push(num);
+    }
+    const dt = Date.parse(maybeDate);
+    if (!isNaN(dt)) {
+      year = new Date(dt).getFullYear();
+    }
+  }
+  if (values.length === 35040) {
+    const hourly = [];
+    for (let i = 0; i < values.length; i += 4) {
+      hourly.push(
+        (values[i] + values[i + 1] + values[i + 2] + values[i + 3]) / 4
+      );
+    }
+    return { year, loads: hourly };
+  }
+  if (values.length === 8760) {
+    return { year, loads: values };
+  }
+  throw new Error("Expected 8760 hourly or 35040 15-min values");
+}
+
+// Summarize an 8760 load array
+function summarizeLoads(arr) {
+  const total = arr.reduce((a, b) => a + b, 0);
+  const peak = Math.max(...arr);
+  const loadFactor = peak ? total / (peak * 8760) : 0;
+  return { total, peak, loadFactor };
+}
+
 function App() {
   const [location, setLocation] = useState("");
   const [annualKwh, setAnnualKwh] = useState(minimalScenario.ElectricLoad.annual_kwh);
@@ -115,6 +162,22 @@ function App() {
   );
   const [offGrid, setOffGrid] = useState(false);
 
+  const initialLoads = useMemo(
+    () =>
+      Array(8760).fill(
+        minimalScenario.ElectricLoad.annual_kwh / 8760
+      ),
+    []
+  );
+  const [loads, setLoads] = useState(initialLoads);
+  const [loadYear, setLoadYear] = useState(2017);
+  const [loadSummary, setLoadSummary] = useState(() => summarizeLoads(initialLoads));
+  const [loadTab, setLoadTab] = useState(0);
+  const [loadFileName, setLoadFileName] = useState("");
+  const [peakLoad, setPeakLoad] = useState(0);
+  const [genLoadFactor, setGenLoadFactor] = useState(0.5);
+  const [siteType, setSiteType] = useState("industrial");
+
   const [runUuid, setRunUuid] = useState(null);
   const [status, setStatus] = useState("");
   const [outputs, setOutputs] = useState(null);
@@ -132,10 +195,63 @@ function App() {
     10
   );
 
+  useEffect(() => {
+    setLoadSummary(summarizeLoads(loads));
+  }, [loads]);
+
+  const handleLoadFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setLoadFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const { year, loads } = parseLoadCsv(reader.result);
+        setLoadYear(year);
+        setLoads(loads);
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const generateProfile = () => {
+    const peak = parseFloat(peakLoad);
+    const lf = parseFloat(genLoadFactor);
+    if (!peak || !lf) return;
+    const shape = Array.from({ length: 8760 }, (_, i) => {
+      const hour = i % 24;
+      const weekday = Math.floor(i / 24) % 7 < 5;
+      switch (siteType) {
+        case "manufacturing":
+          return weekday && hour >= 8 && hour < 18 ? 1 : 0.3;
+        case "cold_storage":
+          return 0.7;
+        case "industrial":
+        default:
+          return 0.8;
+      }
+    });
+    const avgShape = shape.reduce((a, b) => a + b, 0) / 8760;
+    const scale = lf / avgShape;
+    const arr = shape.map((v) => v * scale * peak);
+    setLoadYear(new Date().getFullYear());
+    setLoads(arr);
+  };
+
   const submit = async () => {
     setError("");
     setOutputs(null);
     setRunUuid(null);
+    const scenario = {
+      Site: { latitude: parseFloat(lat), longitude: parseFloat(lon) },
+      ElectricLoad: {
+        year: loadYear,
+        loads_kw: loads,
+        annual_kwh: loadSummary.total,
+        doe_reference_name: doeRefName,
+      },
 
     const hourlyLoads = Array(8760).fill(parseFloat(annualKwh) / 8760);
 
@@ -336,14 +452,68 @@ function App() {
           </Card>
           <Card>
             <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <Typography variant="h6">Load Inputs</Typography>
-              <TextField
-                label="Annual kWh"
-                type="number"
-                fullWidth
-                value={annualKwh}
-                onChange={(e) => setAnnualKwh(e.target.value)}
-              />
+              <Typography variant="h6">Load Profile</Typography>
+              <Tabs value={loadTab} onChange={(e, v) => setLoadTab(v)}>
+                <Tab label="Upload CSV" />
+                <Tab label="Generate" />
+              </Tabs>
+              {loadTab === 0 && (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <Button variant="contained" component="label">
+                    Upload 8760
+                    <input
+                      type="file"
+                      hidden
+                      accept=".csv"
+                      onChange={handleLoadFile}
+                    />
+                  </Button>
+                  {loadFileName && <Typography>{loadFileName}</Typography>}
+                </Box>
+              )}
+              {loadTab === 1 && (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <TextField
+                    label="Peak Load (kW)"
+                    type="number"
+                    value={peakLoad}
+                    onChange={(e) => setPeakLoad(e.target.value)}
+                  />
+                  <TextField
+                    label="Load Factor"
+                    type="number"
+                    value={genLoadFactor}
+                    onChange={(e) => setGenLoadFactor(e.target.value)}
+                  />
+                  <TextField
+                    select
+                    label="Site Type"
+                    value={siteType}
+                    onChange={(e) => setSiteType(e.target.value)}
+                  >
+                    <MenuItem value="industrial">Industrial</MenuItem>
+                    <MenuItem value="manufacturing">Manufacturing</MenuItem>
+                    <MenuItem value="cold_storage">Cold Storage</MenuItem>
+                  </TextField>
+                  <Button variant="outlined" onClick={generateProfile}>
+                    Generate
+                  </Button>
+                </Box>
+              )}
+              {loadSummary && (
+                <Box>
+                  <Typography variant="subtitle1">Summary</Typography>
+                  <Typography>
+                    Total Annual kWh: {loadSummary.total.toFixed(1)}
+                  </Typography>
+                  <Typography>
+                    Peak Load: {loadSummary.peak.toFixed(1)} kW
+                  </Typography>
+                  <Typography>
+                    Load Factor: {loadSummary.loadFactor.toFixed(2)}
+                  </Typography>
+                </Box>
+              )}
               <TextField
                 label="DOE Reference Name"
                 fullWidth
