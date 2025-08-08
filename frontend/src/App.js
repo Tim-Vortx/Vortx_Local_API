@@ -12,7 +12,6 @@ import {
   Paper,
   FormControlLabel,
   Checkbox,
-  MenuItem,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import {
@@ -98,9 +97,12 @@ function App() {
   const [pvCost, setPvCost] = useState(minimalScenario.PV.installed_cost_per_kw);
   const [storageMaxKw, setStorageMaxKw] = useState(0);
   const [storageMaxKwh, setStorageMaxKwh] = useState(0);
-  const [generatorMaxKw, setGeneratorMaxKw] = useState(0);
-  const [generatorFuelCost, setGeneratorFuelCost] = useState(3);
-  const [generatorFuelType, setGeneratorFuelType] = useState("diesel");
+  const [useDiesel, setUseDiesel] = useState(false);
+  const [dieselMaxKw, setDieselMaxKw] = useState(0);
+  const [dieselFuelCost, setDieselFuelCost] = useState(3);
+  const [useNatGas, setUseNatGas] = useState(false);
+  const [natGasMaxKw, setNatGasMaxKw] = useState(0);
+  const [natGasFuelCost, setNatGasFuelCost] = useState(3);
   const [energyRate, setEnergyRate] = useState(
     minimalScenario.ElectricTariff.blended_annual_energy_rate
   );
@@ -132,6 +134,22 @@ function App() {
 
     const hourlyLoads = Array(8760).fill(parseFloat(annualKwh) / 8760);
 
+    const generators = {};
+    if (useDiesel) {
+      generators.GeneratorDiesel = {
+        max_kw: parseFloat(dieselMaxKw),
+        fuel_cost_per_gallon: parseFloat(dieselFuelCost),
+        fuel_type: "diesel",
+      };
+    }
+    if (useNatGas) {
+      generators.GeneratorNatGas = {
+        max_kw: parseFloat(natGasMaxKw),
+        fuel_cost_per_gallon: parseFloat(natGasFuelCost),
+        fuel_type: "natural_gas",
+      };
+    }
+
     const scenario = {
       Site: { latitude: parseFloat(lat), longitude: parseFloat(lon) },
       ElectricLoad: { year: 2017, loads_kw: hourlyLoads },
@@ -148,10 +166,7 @@ function App() {
         max_kw: parseFloat(storageMaxKw),
         max_kwh: parseFloat(storageMaxKwh),
       },
-      Generator: {
-        max_kw: parseFloat(generatorMaxKw),
-        fuel_cost_per_gallon: parseFloat(generatorFuelCost),
-      },
+      ...generators,
       Financial: minimalScenario.Financial,
       Settings: { off_grid_flag: offGrid },
     };
@@ -339,31 +354,51 @@ function App() {
           value={storageMaxKwh}
           onChange={(e) => setStorageMaxKwh(e.target.value)}
         />
-        <Typography variant="h6">Generator</Typography>
-        <TextField
-          label="Max kW"
-          type="number"
-          fullWidth
-          value={generatorMaxKw}
-          onChange={(e) => setGeneratorMaxKw(e.target.value)}
+        <Typography variant="h6">Generators</Typography>
+        <FormControlLabel
+          control={<Checkbox checked={useDiesel} onChange={(e) => setUseDiesel(e.target.checked)} />}
+          label="Diesel"
         />
-        <TextField
-          label="Fuel Cost ($/gal)"
-          type="number"
-          fullWidth
-          value={generatorFuelCost}
-          onChange={(e) => setGeneratorFuelCost(e.target.value)}
+        {useDiesel && (
+          <>
+            <TextField
+              label="Diesel Max kW"
+              type="number"
+              fullWidth
+              value={dieselMaxKw}
+              onChange={(e) => setDieselMaxKw(e.target.value)}
+            />
+            <TextField
+              label="Diesel Fuel Cost ($/gal)"
+              type="number"
+              fullWidth
+              value={dieselFuelCost}
+              onChange={(e) => setDieselFuelCost(e.target.value)}
+            />
+          </>
+        )}
+        <FormControlLabel
+          control={<Checkbox checked={useNatGas} onChange={(e) => setUseNatGas(e.target.checked)} />}
+          label="Natural Gas"
         />
-        <TextField
-          select
-          label="Fuel Type"
-          fullWidth
-          value={generatorFuelType}
-          onChange={(e) => setGeneratorFuelType(e.target.value)}
-        >
-          <MenuItem value="diesel">Diesel</MenuItem>
-          <MenuItem value="natural_gas">Natural Gas</MenuItem>
-        </TextField>
+        {useNatGas && (
+          <>
+            <TextField
+              label="Natural Gas Max kW"
+              type="number"
+              fullWidth
+              value={natGasMaxKw}
+              onChange={(e) => setNatGasMaxKw(e.target.value)}
+            />
+            <TextField
+              label="Natural Gas Fuel Cost ($/gal)"
+              type="number"
+              fullWidth
+              value={natGasFuelCost}
+              onChange={(e) => setNatGasFuelCost(e.target.value)}
+            />
+          </>
+        )}
         <Typography variant="h6">Tariff</Typography>
         <TextField
           label="Energy Rate ($/kWh)"

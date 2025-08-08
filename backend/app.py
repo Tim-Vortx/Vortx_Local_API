@@ -62,6 +62,10 @@ def submit():
         logging.error(f"Malformed JSON in request: {e}")
         return jsonify({"error": "Malformed JSON in request"}), 400
 
+    generator_keys = [k for k in scenario.keys() if k.lower().startswith("generator")]
+    if generator_keys:
+        logging.info(f"Forwarding generator keys to NREL: {generator_keys}")
+
     if not NREL_API_KEY:
         logging.error("NREL_API_KEY is not configured")
         return jsonify({"error": "Server missing NREL API key"}), 500
