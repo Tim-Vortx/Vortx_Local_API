@@ -12,7 +12,6 @@ import {
   Paper,
   FormControlLabel,
   Checkbox,
-  MenuItem,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import {
@@ -98,10 +97,12 @@ function App() {
   const [pvCost, setPvCost] = useState(minimalScenario.PV.installed_cost_per_kw);
   const [storageMaxKw, setStorageMaxKw] = useState(0);
   const [storageMaxKwh, setStorageMaxKwh] = useState(0);
+
   const [generatorMaxKw, setGeneratorMaxKw] = useState(0);
   const [generatorFuelCostPerGallon, setGeneratorFuelCostPerGallon] = useState(3);
   const [generatorFuelCostPerMmbtu, setGeneratorFuelCostPerMmbtu] = useState(6);
   const [generatorFuelType, setGeneratorFuelType] = useState("diesel");
+
   const [energyRate, setEnergyRate] = useState(
     minimalScenario.ElectricTariff.blended_annual_energy_rate
   );
@@ -132,6 +133,22 @@ function App() {
     setRunUuid(null);
 
     const hourlyLoads = Array(8760).fill(parseFloat(annualKwh) / 8760);
+
+    const generators = {};
+    if (useDiesel) {
+      generators.GeneratorDiesel = {
+        max_kw: parseFloat(dieselMaxKw),
+        fuel_cost_per_gallon: parseFloat(dieselFuelCost),
+        fuel_type: "diesel",
+      };
+    }
+    if (useNatGas) {
+      generators.GeneratorNatGas = {
+        max_kw: parseFloat(natGasMaxKw),
+        fuel_cost_per_gallon: parseFloat(natGasFuelCost),
+        fuel_type: "natural_gas",
+      };
+    }
 
     const scenario = {
       Site: { latitude: parseFloat(lat), longitude: parseFloat(lon) },
@@ -343,13 +360,10 @@ function App() {
           value={storageMaxKwh}
           onChange={(e) => setStorageMaxKwh(e.target.value)}
         />
-        <Typography variant="h6">Generator</Typography>
-        <TextField
-          label="Max kW"
-          type="number"
-          fullWidth
-          value={generatorMaxKw}
-          onChange={(e) => setGeneratorMaxKw(e.target.value)}
+        <Typography variant="h6">Generators</Typography>
+        <FormControlLabel
+          control={<Checkbox checked={useDiesel} onChange={(e) => setUseDiesel(e.target.checked)} />}
+          label="Diesel"
         />
         <TextField
           label={
@@ -370,16 +384,24 @@ function App() {
               : setGeneratorFuelCostPerGallon(e.target.value)
           }
         />
-        <TextField
-          select
-          label="Fuel Type"
-          fullWidth
-          value={generatorFuelType}
-          onChange={(e) => setGeneratorFuelType(e.target.value)}
-        >
-          <MenuItem value="diesel">Diesel</MenuItem>
-          <MenuItem value="natural_gas">Natural Gas</MenuItem>
-        </TextField>
+        {useNatGas && (
+          <>
+            <TextField
+              label="Natural Gas Max kW"
+              type="number"
+              fullWidth
+              value={natGasMaxKw}
+              onChange={(e) => setNatGasMaxKw(e.target.value)}
+            />
+            <TextField
+              label="Natural Gas Fuel Cost ($/gal)"
+              type="number"
+              fullWidth
+              value={natGasFuelCost}
+              onChange={(e) => setNatGasFuelCost(e.target.value)}
+            />
+          </>
+        )}
         <Typography variant="h6">Tariff</Typography>
         <TextField
           label="Energy Rate ($/kWh)"
