@@ -11,6 +11,8 @@ import time
 import re
 import json
 
+from urdb_cache import fetch_tariffs
+
 load_dotenv()
 
 logging.basicConfig(
@@ -160,6 +162,23 @@ def submit():
         logging.warning("Failed to write scenario log file %s: %s", run_uuid_path, e)
 
     return jsonify({"run_uuid": run_uuid})
+
+
+@app.route("/urdb", methods=["GET"])
+def urdb():
+    """Return cached URDB tariff options for a location."""
+    lat = request.args.get("lat", type=float)
+    lon = request.args.get("lon", type=float)
+    if lat is None or lon is None:
+        return jsonify({"error": "lat and lon required"}), 400
+    try:
+        data = fetch_tariffs(lat, lon, api_key=NREL_API_KEY)
+    except Exception as e:
+        logging.error(f"URDB lookup failed for {lat},{lon}: {e}")
+        return jsonify({"error": "URDB lookup failed"}), 502
+    items = data.get("items", [])
+    tariffs = [{"label": i.get("label"), "name": i.get("name")} for i in items]
+    return jsonify(tariffs)
 
 
 @app.route("/status/<run_uuid>", methods=["GET"])
