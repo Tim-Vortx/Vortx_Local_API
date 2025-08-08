@@ -68,6 +68,10 @@ def submit():
         site = scenario.get("Site")
         el_load = scenario.get("ElectricLoad", {})
         loads_kw = el_load.get("loads_kw") if isinstance(el_load, dict) else None
+        # Sanitize DOE reference name if provided by frontend but invalid for NREL
+        if isinstance(el_load, dict) and "doe_reference_name" in el_load:
+            removed = el_load.pop("doe_reference_name", None)
+            logging.info(f"Removed ElectricLoad.doe_reference_name (was '{removed}') to satisfy NREL API constraints")
 
         if not site or not isinstance(site, dict) or \
            "latitude" not in site or "longitude" not in site:
