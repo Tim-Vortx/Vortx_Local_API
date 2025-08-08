@@ -30,6 +30,7 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from "recharts";
+import PowerChart from "./PowerChart";
 
 // colors for the chart series
 const COLORS = [
@@ -1001,6 +1002,9 @@ function App() {
               <Typography variant="h5" gutterBottom>
                 Outputs
               </Typography>
+              <Box mb={4}>
+                <PowerChart />
+              </Box>
               <Box mb={4}>
                 <Typography variant="h6">Daily Operations</Typography>
                 {timeSeries.length > 0 ? (
