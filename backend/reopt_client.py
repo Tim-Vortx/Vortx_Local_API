@@ -9,13 +9,17 @@ the same logic.
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any, Dict
 
+from dotenv import load_dotenv
 import requests
 
 # Default API URL for the REopt "stable" endpoint
 DEFAULT_API_URL = "https://developer.nrel.gov/api/reopt/stable"
+
+load_dotenv()
 
 
 def _poll_results(url: str, poll_interval: int = 5, headers: Dict[str, str] | None = None) -> Dict[str, Any]:
@@ -38,7 +42,7 @@ def _poll_results(url: str, poll_interval: int = 5, headers: Dict[str, str] | No
 
     status = "Optimizing..."
     while status == "Optimizing...":
-        resp = requests.get(url, headers=headers, verify=False)
+        resp = requests.get(url, headers=headers)
         resp.raise_for_status()
         data = resp.json()
         # v3 places the status at the top level
@@ -67,7 +71,7 @@ def _inputs_match(sent: Dict[str, Any], received: Dict[str, Any]) -> bool:
 
 def get_api_results(
     post: Dict[str, Any],
-    api_key: str,
+    api_key: str | None = None,
     api_url: str = DEFAULT_API_URL,
     poll_interval: int = 5,
 ) -> Dict[str, Any]:
@@ -77,8 +81,9 @@ def get_api_results(
     ----------
     post : dict
         Scenario inputs to send to the API.
-    api_key : str
-        NREL developer API key.
+    api_key : str, optional
+        NREL developer API key. If not provided, the ``NREL_API_KEY``
+        environment variable will be used.
     api_url : str, optional
         Base URL of the REopt API, defaults to the stable endpoint.
     poll_interval : int, optional
@@ -97,8 +102,12 @@ def get_api_results(
     """
 
     post_url = f"{api_url}/job/"
+    if api_key is None:
+        api_key = os.getenv("NREL_API_KEY")
+    if not api_key:
+        raise ValueError("NREL_API_KEY is not set")
     headers = {"X-Api-Key": api_key}
-    resp = requests.post(post_url, json=post, headers=headers, verify=False)
+    resp = requests.post(post_url, json=post, headers=headers)
     resp.raise_for_status()
     run_uuid = resp.json()["run_uuid"]
 
