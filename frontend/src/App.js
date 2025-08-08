@@ -99,7 +99,8 @@ function App() {
   const [storageMaxKw, setStorageMaxKw] = useState(0);
   const [storageMaxKwh, setStorageMaxKwh] = useState(0);
   const [generatorMaxKw, setGeneratorMaxKw] = useState(0);
-  const [generatorFuelCost, setGeneratorFuelCost] = useState(3);
+  const [generatorFuelCostPerGallon, setGeneratorFuelCostPerGallon] = useState(3);
+  const [generatorFuelCostPerMmbtu, setGeneratorFuelCostPerMmbtu] = useState(6);
   const [generatorFuelType, setGeneratorFuelType] = useState("diesel");
   const [energyRate, setEnergyRate] = useState(
     minimalScenario.ElectricTariff.blended_annual_energy_rate
@@ -150,7 +151,10 @@ function App() {
       },
       Generator: {
         max_kw: parseFloat(generatorMaxKw),
-        fuel_cost_per_gallon: parseFloat(generatorFuelCost),
+        ...(generatorFuelType === "natural_gas"
+          ? { fuel_cost_per_mmbtu: parseFloat(generatorFuelCostPerMmbtu) }
+          : { fuel_cost_per_gallon: parseFloat(generatorFuelCostPerGallon) }),
+        fuel_type: generatorFuelType,
       },
       Financial: minimalScenario.Financial,
       Settings: { off_grid_flag: offGrid },
@@ -348,11 +352,23 @@ function App() {
           onChange={(e) => setGeneratorMaxKw(e.target.value)}
         />
         <TextField
-          label="Fuel Cost ($/gal)"
+          label={
+            generatorFuelType === "natural_gas"
+              ? "Fuel Cost ($/MMBtu)"
+              : "Fuel Cost ($/gal)"
+          }
           type="number"
           fullWidth
-          value={generatorFuelCost}
-          onChange={(e) => setGeneratorFuelCost(e.target.value)}
+          value={
+            generatorFuelType === "natural_gas"
+              ? generatorFuelCostPerMmbtu
+              : generatorFuelCostPerGallon
+          }
+          onChange={(e) =>
+            generatorFuelType === "natural_gas"
+              ? setGeneratorFuelCostPerMmbtu(e.target.value)
+              : setGeneratorFuelCostPerGallon(e.target.value)
+          }
         />
         <TextField
           select
