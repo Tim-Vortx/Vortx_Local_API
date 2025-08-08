@@ -251,6 +251,8 @@ function App() {
   const [demandRate, setDemandRate] = useState(
     minimalScenario.ElectricTariff.blended_annual_demand_rate,
   );
+  const [tariffs, setTariffs] = useState([]);
+  const [urdbLabel, setUrdbLabel] = useState("");
   const [offGrid, setOffGrid] = useState(false);
 
   const initialLoads = useMemo(
@@ -330,6 +332,36 @@ function App() {
     setLoads(arr);
   };
 
+  const fetchTariffs = async () => {
+    setError("");
+    setTariffs([]);
+    if (!location.trim()) {
+      setError("Location is required to fetch tariffs");
+      return;
+    }
+    try {
+      const geoRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(location)}`,
+      );
+      const geoData = await geoRes.json();
+      if (!geoData.length) {
+        setError("Location not found");
+        return;
+      }
+      const lat = parseFloat(geoData[0].lat);
+      const lon = parseFloat(geoData[0].lon);
+      const res = await fetch(`/urdb?lat=${lat}&lon=${lon}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setTariffs(data);
+      } else if (data.error) {
+        setError(data.error);
+      }
+    } catch (e) {
+      setError(`Tariff fetch failed: ${e.message}`);
+    }
+  };
+
   const submit = async () => {
     setError("");
     setOutputs(null);
@@ -381,10 +413,12 @@ function App() {
         annual_kwh: summary.total,
         doe_reference_name: doeRefName,
       },
-      ElectricTariff: {
-        blended_annual_energy_rate: parseFloat(energyRate),
-        blended_annual_demand_rate: parseFloat(demandRate),
-      },
+      ElectricTariff: urdbLabel
+        ? { urdb_label: urdbLabel }
+        : {
+            blended_annual_energy_rate: parseFloat(energyRate),
+            blended_annual_demand_rate: parseFloat(demandRate),
+          },
       ElectricUtility: minimalScenario.ElectricUtility,
       Financial: minimalScenario.Financial,
       Settings: { off_grid_flag: offGrid },
@@ -580,6 +614,23 @@ function App() {
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
               />
+              <Button variant="outlined" onClick={fetchTariffs}>
+                Fetch Tariffs
+              </Button>
+              {tariffs.length > 0 && (
+                <TextField
+                  select
+                  label="Electric Tariff"
+                  value={urdbLabel}
+                  onChange={(e) => setUrdbLabel(e.target.value)}
+                >
+                  {tariffs.map((t) => (
+                    <MenuItem key={t.label} value={t.label}>
+                      {t.name || t.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
             </CardContent>
           </Card>
           <Card>

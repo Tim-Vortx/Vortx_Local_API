@@ -48,3 +48,11 @@ The polling behavior in the React app can be tuned with the following variables 
 - `REACT_APP_MAX_POLL_TIME` – maximum total time to poll before giving up in milliseconds (300000)
 
 These can be set in a `.env` file inside the `frontend` directory if needed.
+
+## URDB Tariff Lookup
+
+The backend exposes a `/urdb` endpoint that proxies NREL's Utility Rate Database
+and caches results on disk for 24 hours. The React interface includes a *Fetch
+Tariffs* button which retrieves available rates for the provided location and
+lets you choose a tariff. The selected `urdb_label` is sent with the REopt
+scenario under `ElectricTariff`.
