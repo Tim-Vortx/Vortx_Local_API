@@ -135,22 +135,6 @@ function App() {
 
     const hourlyLoads = Array(8760).fill(parseFloat(annualKwh) / 8760);
 
-    const generators = {};
-    if (useDiesel) {
-      generators.GeneratorDiesel = {
-        max_kw: parseFloat(dieselMaxKw),
-        fuel_cost_per_gallon: parseFloat(dieselFuelCost),
-        fuel_type: "diesel",
-      };
-    }
-    if (useNatGas) {
-      generators.GeneratorNatGas = {
-        max_kw: parseFloat(natGasMaxKw),
-        fuel_cost_per_gallon: parseFloat(natGasFuelCost),
-        fuel_type: "natural_gas",
-      };
-    }
-
     const scenario = {
       Site: { latitude: parseFloat(lat), longitude: parseFloat(lon) },
       ElectricLoad: { year: 2017, loads_kw: hourlyLoads },
@@ -365,10 +349,6 @@ function App() {
           onChange={(e) => setStorageMaxKwh(e.target.value)}
         />
         <Typography variant="h6">Generators</Typography>
-        <FormControlLabel
-          control={<Checkbox checked={useDiesel} onChange={(e) => setUseDiesel(e.target.checked)} />}
-          label="Diesel"
-        />
         {generatorFuelType === "diesel" && (
           <TextField
             label="Fuel Cost ($/gal)"
