@@ -61,18 +61,63 @@ const SERIES_MAP = {
     "Diesel Generator Charges BESS",
 };
 
+function ArrayRenderer({ arr }) {
+  const [expanded, setExpanded] = useState(false);
+  const allPrimitive = arr.every(
+    (item) => item === null || typeof item !== "object",
+  );
+
+  if (!expanded) {
+    const text =
+      arr.length > 50
+        ? JSON.stringify(arr.slice(0, 50)) + " …" + ` (${arr.length} items)`
+        : JSON.stringify(arr);
+    return (
+      <Box>
+        <Typography sx={{ whiteSpace: "pre-wrap" }}>{text}</Typography>
+        {arr.length > 50 && (
+          <Button size="small" onClick={() => setExpanded(true)}>
+            Show all
+          </Button>
+        )}
+      </Box>
+    );
+  }
+
+  return (
+    <Box>
+      {allPrimitive ? (
+        <Typography sx={{ whiteSpace: "pre-wrap" }}>
+          {JSON.stringify(arr)}
+        </Typography>
+      ) : (
+        arr.map((item, idx) => (
+          <Accordion key={idx} disableGutters>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography>{idx}</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <RenderOutputs data={item} />
+            </AccordionDetails>
+          </Accordion>
+        ))
+      )}
+      {arr.length > 50 && (
+        <Button size="small" onClick={() => setExpanded(false)}>
+          Show less
+        </Button>
+      )}
+    </Box>
+  );
+}
+
 /** Recursively render the outputs object using MUI accordions */
 function RenderOutputs({ data }) {
   if (data === null || data === undefined) return null;
 
   if (typeof data !== "object" || Array.isArray(data)) {
-    // primitive or array
     if (Array.isArray(data)) {
-      const text =
-        data.length > 50
-          ? JSON.stringify(data.slice(0, 50)) + " …" + ` (${data.length} items)`
-          : JSON.stringify(data);
-      return <Typography sx={{ whiteSpace: "pre-wrap" }}>{text}</Typography>;
+      return <ArrayRenderer arr={data} />;
     }
     return <Typography>{String(data)}</Typography>;
   }
