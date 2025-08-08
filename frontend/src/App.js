@@ -13,6 +13,10 @@ import {
   FormControlLabel,
   Checkbox,
   MenuItem,
+  Card,
+  CardContent,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import {
@@ -117,6 +121,7 @@ function App() {
   const [outputs, setOutputs] = useState(null);
   const [error, setError] = useState("");
   const [day, setDay] = useState(0); // day of year for chart
+  const [tab, setTab] = useState(0); // 0: Inputs, 1: Results
 
   // Polling configuration
   const baseDelay = parseInt(
@@ -282,200 +287,246 @@ function App() {
       return point;
     });
   }, [timeSeries, day]);
-
   return (
     <Container sx={{ py: 4 }}>
       <Typography variant="h4" gutterBottom>
         REopt MVP
       </Typography>
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <Typography variant="h6">Site</Typography>
-        <TextField
-          label="Latitude"
-          type="number"
-          fullWidth
-          value={lat}
-          onChange={(e) => setLat(e.target.value)}
-        />
-        <TextField
-          label="Longitude"
-          type="number"
-          fullWidth
-          value={lon}
-          onChange={(e) => setLon(e.target.value)}
-        />
-        <Typography variant="h6">Load</Typography>
-        <TextField
-          label="Annual kWh"
-          type="number"
-          fullWidth
-          value={annualKwh}
-          onChange={(e) => setAnnualKwh(e.target.value)}
-        />
-        <TextField
-          label="DOE Reference Name"
-          fullWidth
-          value={doeRefName}
-          onChange={(e) => setDoeRefName(e.target.value)}
-        />
-        <Typography variant="h6">PV</Typography>
-        <TextField
-          label="Max kW"
-          type="number"
-          fullWidth
-          value={pvMaxKw}
-          onChange={(e) => setPvMaxKw(e.target.value)}
-        />
-        <TextField
-          label="Cost per kW ($)"
-          type="number"
-          fullWidth
-          value={pvCost}
-          onChange={(e) => setPvCost(e.target.value)}
-        />
-        <Typography variant="h6">Battery Storage</Typography>
-        <TextField
-          label="Max kW"
-          type="number"
-          fullWidth
-          value={storageMaxKw}
-          onChange={(e) => setStorageMaxKw(e.target.value)}
-        />
-        <TextField
-          label="Max kWh"
-          type="number"
-          fullWidth
-          value={storageMaxKwh}
-          onChange={(e) => setStorageMaxKwh(e.target.value)}
-        />
-        <Typography variant="h6">Generators</Typography>
-        {generatorFuelType === "diesel" && (
-          <TextField
-            label="Fuel Cost ($/gal)"
-            type="number"
-            fullWidth
-            value={generatorFuelCostPerGallon}
-            onChange={(e) => setGeneratorFuelCostPerGallon(e.target.value)}
-          />
-        )}
-        {generatorFuelType === "natural_gas" && (
-          <TextField
-            label="Fuel Cost ($/MMBtu)"
-            type="number"
-            fullWidth
-            value={generatorFuelCostPerMmbtu}
-            onChange={(e) => setGeneratorFuelCostPerMmbtu(e.target.value)}
-          />
-        )}
-        {generatorFuelType === "diesel_and_natural_gas" && (
-          <>
-            <TextField
-              label="Diesel Fuel Cost ($/gal)"
-              type="number"
-              fullWidth
-              value={generatorFuelCostPerGallon}
-              onChange={(e) => setGeneratorFuelCostPerGallon(e.target.value)}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              label="Natural Gas Fuel Cost ($/MMBtu)"
-              type="number"
-              fullWidth
-              value={generatorFuelCostPerMmbtu}
-              onChange={(e) => setGeneratorFuelCostPerMmbtu(e.target.value)}
-            />
-          </>
-        )}
-        <TextField
-          select
-          label="Fuel Type"
-          fullWidth
-          value={generatorFuelType}
-          onChange={(e) => setGeneratorFuelType(e.target.value)}
-        >
-          <MenuItem value="diesel">Diesel</MenuItem>
-          <MenuItem value="natural_gas">Natural Gas</MenuItem>
-          <MenuItem value="diesel_and_natural_gas">Diesel & Natural Gas</MenuItem>
-        </TextField>
-
-        <Typography variant="h6">Tariff</Typography>
-        <TextField
-          label="Energy Rate ($/kWh)"
-          type="number"
-          fullWidth
-          value={energyRate}
-          onChange={(e) => setEnergyRate(e.target.value)}
-        />
-        <TextField
-          label="Demand Rate ($/kW)"
-          type="number"
-          fullWidth
-          value={demandRate}
-          onChange={(e) => setDemandRate(e.target.value)}
-        />
-        <FormControlLabel
-          control={<Checkbox checked={offGrid} onChange={(e) => setOffGrid(e.target.checked)} />}
-          label="Off Grid"
-        />
-      </Box>
-      <Box mt={2} mb={2}>
-        <Button variant="contained" onClick={submit}>
-          Run REopt
-        </Button>
-      </Box>
-      {error && (
-        <Typography color="error" gutterBottom>
-          Error: {error}
-        </Typography>
-      )}
-      <Typography>Status: {status}</Typography>
-      {outputs && (
-        <Box mt={4}>
-          <Typography variant="h5" gutterBottom>
-            Outputs
-          </Typography>
-          <Box mb={4}>
-            <Typography variant="h6">Daily Operations</Typography>
-            {timeSeries.length > 0 ? (
-              <>
+      <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ mb: 2 }}>
+        <Tab label="Inputs" />
+        <Tab label="Results" />
+      </Tabs>
+      {tab === 0 && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Card>
+            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Typography variant="h6">Site</Typography>
+              <TextField
+                label="Latitude"
+                type="number"
+                fullWidth
+                value={lat}
+                onChange={(e) => setLat(e.target.value)}
+              />
+              <TextField
+                label="Longitude"
+                type="number"
+                fullWidth
+                value={lon}
+                onChange={(e) => setLon(e.target.value)}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Typography variant="h6">Load Inputs</Typography>
+              <TextField
+                label="Annual kWh"
+                type="number"
+                fullWidth
+                value={annualKwh}
+                onChange={(e) => setAnnualKwh(e.target.value)}
+              />
+              <TextField
+                label="DOE Reference Name"
+                fullWidth
+                value={doeRefName}
+                onChange={(e) => setDoeRefName(e.target.value)}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Typography variant="h6">Utility Inputs</Typography>
+              <TextField
+                label="Energy Rate ($/kWh)"
+                type="number"
+                fullWidth
+                value={energyRate}
+                onChange={(e) => setEnergyRate(e.target.value)}
+              />
+              <TextField
+                label="Demand Rate ($/kW)"
+                type="number"
+                fullWidth
+                value={demandRate}
+                onChange={(e) => setDemandRate(e.target.value)}
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox checked={offGrid} onChange={(e) => setOffGrid(e.target.checked)} />
+                }
+                label="Off Grid"
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Typography variant="h6">Solar</Typography>
+              <TextField
+                label="Max kW"
+                type="number"
+                fullWidth
+                value={pvMaxKw}
+                onChange={(e) => setPvMaxKw(e.target.value)}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Typography variant="h6">Battery Storage</Typography>
+              <TextField
+                label="Max kW"
+                type="number"
+                fullWidth
+                value={storageMaxKw}
+                onChange={(e) => setStorageMaxKw(e.target.value)}
+              />
+              <TextField
+                label="Max kWh"
+                type="number"
+                fullWidth
+                value={storageMaxKwh}
+                onChange={(e) => setStorageMaxKwh(e.target.value)}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Typography variant="h6">Generators</Typography>
+              <TextField
+                label="Max kW"
+                type="number"
+                fullWidth
+                value={generatorMaxKw}
+                onChange={(e) => setGeneratorMaxKw(e.target.value)}
+              />
+              <TextField
+                select
+                label="Fuel Type"
+                fullWidth
+                value={generatorFuelType}
+                onChange={(e) => setGeneratorFuelType(e.target.value)}
+              >
+                <MenuItem value="diesel">Diesel</MenuItem>
+                <MenuItem value="natural_gas">Natural Gas</MenuItem>
+                <MenuItem value="diesel_and_natural_gas">Diesel &amp; Natural Gas</MenuItem>
+              </TextField>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Typography variant="h6">Cost Estimates</Typography>
+              <TextField
+                label="PV Cost per kW ($)"
+                type="number"
+                fullWidth
+                value={pvCost}
+                onChange={(e) => setPvCost(e.target.value)}
+              />
+              {generatorFuelType === "diesel" && (
                 <TextField
+                  label="Generator Fuel Cost ($/gal)"
                   type="number"
-                  label="Day (0-364)"
-                  value={day}
-                  onChange={(e) =>
-                    setDay(
-                      Math.min(364, Math.max(0, parseInt(e.target.value || "0", 10)))
-                    )
-                  }
-                  sx={{ mb: 2 }}
+                  fullWidth
+                  value={generatorFuelCostPerGallon}
+                  onChange={(e) => setGeneratorFuelCostPerGallon(e.target.value)}
                 />
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="hour" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    {timeSeries.map((ts, i) => (
-                      <Line
-                        type="monotone"
-                        key={ts.key}
-                        dataKey={ts.key}
-                        name={ts.label}
-                        stroke={COLORS[i % COLORS.length]}
-                        dot={false}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </>
-            ) : (
-              <Typography>No timeseries data available.</Typography>
-            )}
+              )}
+              {generatorFuelType === "natural_gas" && (
+                <TextField
+                  label="Generator Fuel Cost ($/MMBtu)"
+                  type="number"
+                  fullWidth
+                  value={generatorFuelCostPerMmbtu}
+                  onChange={(e) => setGeneratorFuelCostPerMmbtu(e.target.value)}
+                />
+              )}
+              {generatorFuelType === "diesel_and_natural_gas" && (
+                <>
+                  <TextField
+                    label="Diesel Fuel Cost ($/gal)"
+                    type="number"
+                    fullWidth
+                    value={generatorFuelCostPerGallon}
+                    onChange={(e) => setGeneratorFuelCostPerGallon(e.target.value)}
+                    sx={{ mb: 2 }}
+                  />
+                  <TextField
+                    label="Natural Gas Fuel Cost ($/MMBtu)"
+                    type="number"
+                    fullWidth
+                    value={generatorFuelCostPerMmbtu}
+                    onChange={(e) => setGeneratorFuelCostPerMmbtu(e.target.value)}
+                  />
+                </>
+              )}
+            </CardContent>
+          </Card>
+          <Box mt={2} mb={2}>
+            <Button variant="contained" onClick={submit}>
+              Run REopt
+            </Button>
           </Box>
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <RenderOutputs data={outputs} />
-          </Paper>
+        </Box>
+      )}
+      {tab === 1 && (
+        <Box>
+          <Typography>Status: {status}</Typography>
+          {error && (
+            <Typography color="error" gutterBottom>
+              Error: {error}
+            </Typography>
+          )}
+          {outputs && (
+            <Box mt={4}>
+              <Typography variant="h5" gutterBottom>
+                Outputs
+              </Typography>
+              <Box mb={4}>
+                <Typography variant="h6">Daily Operations</Typography>
+                {timeSeries.length > 0 ? (
+                  <>
+                    <TextField
+                      type="number"
+                      label="Day (0-364)"
+                      value={day}
+                      onChange={(e) =>
+                        setDay(
+                          Math.min(364, Math.max(0, parseInt(e.target.value || "0", 10)))
+                        )
+                      }
+                      sx={{ mb: 2 }}
+                    />
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="hour" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        {timeSeries.map((ts, i) => (
+                          <Line
+                            type="monotone"
+                            key={ts.key}
+                            dataKey={ts.key}
+                            name={ts.label}
+                            stroke={COLORS[i % COLORS.length]}
+                            dot={false}
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </>
+                ) : (
+                  <Typography>No timeseries data available.</Typography>
+                )}
+              </Box>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <RenderOutputs data={outputs} />
+              </Paper>
+            </Box>
+          )}
         </Box>
       )}
     </Container>
