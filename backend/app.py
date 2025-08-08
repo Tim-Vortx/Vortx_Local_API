@@ -1,11 +1,7 @@
 import logging
+import os
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
@@ -14,10 +10,19 @@ import time
 import re
 import json
 
+load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
 # Track temporary cooldowns for run_uuids after hitting rate limits
 cooldowns = {}
 
 API_URL = "https://developer.nrel.gov/api/reopt/v3/"
+NREL_API_KEY = os.getenv("NREL_API_KEY")
 
 def _extract_support_id(body: str) -> str | None:
     match = re.search(r"support ID is: (\d+)", body, re.IGNORECASE)
@@ -57,10 +62,9 @@ def submit():
         logging.error(f"Malformed JSON in request: {e}")
         return jsonify({"error": "Malformed JSON in request"}), 400
 
-    api_key = request.headers.get("X-Api-Key")
-    logging.info(f"X-Api-Key header present: {api_key is not None}")
-    if not api_key:
-        return jsonify({"error": "Missing X-Api-Key header"}), 401
+    if not NREL_API_KEY:
+        logging.error("NREL_API_KEY is not configured")
+        return jsonify({"error": "Server missing NREL API key"}), 500
 
     post_url = f"{API_URL}job/"
     try:
@@ -68,7 +72,7 @@ def submit():
             "User-Agent":   "VortxOpt/1.0",
             "Accept":       "application/json",
             "Content-Type": "application/json",
-            "X-Api-Key":    api_key,
+            "X-Api-Key":    NREL_API_KEY,
         }
         resp = requests.post(post_url, json=scenario, headers=headers)
         resp.raise_for_status()
@@ -113,10 +117,9 @@ def status(run_uuid):
             {"Retry-After": str(retry_after)},
         )
 
-    api_key = request.headers.get("X-Api-Key")
-    logging.info(f"X-Api-Key header present: {api_key is not None}")
-    if not api_key:
-        return jsonify({"error": "Missing X-Api-Key header"}), 401
+    if not NREL_API_KEY:
+        logging.error("NREL_API_KEY is not configured")
+        return jsonify({"error": "Server missing NREL API key"}), 500
 
     results_url = f"{API_URL}job/{run_uuid}/results/"
     logging.info(f"Polling status for run_uuid: {run_uuid}")
@@ -126,7 +129,7 @@ def status(run_uuid):
         headers = {
             "User-Agent":   "VortxOpt/1.0",
             "Accept":       "application/json",
-            "X-Api-Key":    api_key,
+            "X-Api-Key":    NREL_API_KEY,
         }
         resp = requests.get(results_url, headers=headers)
         logging.info(f"/results response status {resp.status_code} for run_uuid {run_uuid}")

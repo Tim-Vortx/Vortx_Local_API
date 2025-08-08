@@ -63,8 +63,7 @@ function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // forward your real key
-          "X-Api-Key": process.env.REACT_APP_NREL_API_KEY,
+          // API key is stored on the backend
         },
         body: JSON.stringify(parsed),
       });
@@ -112,9 +111,7 @@ function App() {
 
       try {
         const res = await fetch(`/status/${runUuid}`, {
-          headers: {
-            "X-Api-Key": process.env.REACT_APP_NREL_API_KEY,
-          },
+          headers: {},
         });
         const text = await res.text();
         let data = null;

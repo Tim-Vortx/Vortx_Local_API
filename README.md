@@ -16,6 +16,9 @@ It includes:
    NREL_API_KEY=YOUR_REAL_NREL_KEY
    ```
 
+   The backend loads this key from the environment and forwards it to the
+   NREL API; the frontend does not need to send the key with requests.
+
 2. Install requirements and start Flask on port 5000 (matching the React proxy):
 
    ```bash
