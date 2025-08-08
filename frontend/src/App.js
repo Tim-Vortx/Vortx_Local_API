@@ -174,9 +174,6 @@ function summarizeLoads(arr) {
 
 function App() {
   const [location, setLocation] = useState("");
-  const [annualKwh, setAnnualKwh] = useState(
-    minimalScenario.ElectricLoad.annual_kwh,
-  );
   const [doeRefName, setDoeRefName] = useState(
     minimalScenario.ElectricLoad.doe_reference_name,
   );
@@ -319,15 +316,24 @@ function App() {
       return;
     }
 
-    // Build hourly loads (8760 values)
-    const hourlyLoads = Array(8760).fill(parseFloat(annualKwh) / 8760);
+    // Validate and summarize the load profile
+    if (loads.length !== 8760) {
+      setError("Load profile must contain exactly 8760 hourly values");
+      setStatus("Error");
+      return;
+    }
+
+    const summary = summarizeLoads(loads);
+    if (Math.abs(summary.total - loadSummary.total) > 1e-6) {
+      setLoadSummary(summary);
+    }
 
     const scenario = {
       Site: { latitude: lat, longitude: lon },
       ElectricLoad: {
         year: loadYear,
-        loads_kw: hourlyLoads,
-        annual_kwh: loadSummary.total,
+        loads_kw: loads,
+        annual_kwh: summary.total,
         doe_reference_name: doeRefName,
       },
       ElectricTariff: {
