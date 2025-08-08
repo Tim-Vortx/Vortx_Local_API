@@ -263,7 +263,7 @@ def status(run_uuid):
             logging.error(f"NREL API connect timed out on results: {e}")
             return jsonify({"error": "NREL API connect timed out"}), 504
         except requests.exceptions.HTTPError as e:
-            # Handle rate-limit here if available in the exception
+            # Handle rate-limit and bad request errors here if available in the exception
             resp_status = getattr(e, "response", None)
             if resp_status is not None and getattr(resp_status, "status_code", None) == 429:
                 retry_after = int(getattr(resp_status.headers, "get", lambda k, d: d)("Retry-After", "60"))
@@ -273,6 +273,12 @@ def status(run_uuid):
                 if time.time() - start_time >= 300:
                     break
                 continue
+            # Explicitly surface 400 Bad Request from NREL to the client
+        if getattr(resp, "status_code", None) == 400:
+            error_detail = getattr(resp, "text", "")
+            logging.error(f"NREL API 400 Bad Request on results for run_uuid {run_uuid}: {error_detail}")
+            # Do not surface a 400 to clients polling status; return a 200 with error details instead
+            return jsonify({"error": "Bad Request from NREL API", "details": error_detail}), 200
             logging.error(f"HTTP error from NREL API on results: {e}")
             return jsonify({"error": str(e)}), 502
         except requests.exceptions.RequestException as e:
