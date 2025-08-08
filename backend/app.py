@@ -50,6 +50,9 @@ def _redact_api_key(data):
 app = Flask(__name__)
 CORS(app)  # allow React dev-server to call us
 
+# Define a reasonable timeout to avoid hanging requests to NREL
+DEFAULT_TIMEOUT = 600  # seconds
+
 @app.route("/submit", methods=["POST"])
 def submit():
     """Validate and forward a scenario to NREL's API."""
@@ -95,13 +98,22 @@ def submit():
             "Content-Type": "application/json",
             "X-Api-Key":    NREL_API_KEY,
         }
+        start_time = time.time()
         # Forward scenario without altering fuel-cost fields or units
-        resp = requests.post(post_url, json=scenario, headers=headers)
+        resp = requests.post(post_url, json=scenario, headers=headers, timeout=DEFAULT_TIMEOUT)
+        duration = time.time() - start_time
+        logging.info(f"NREL POST /job/ completed in {duration:.2f}s with status {resp.status_code}")
         resp.raise_for_status()
         data = resp.json()
         logging.info("Submit response from NREL: %s", _redact_api_key(data))
+    except requests.exceptions.Timeout as e:
+        logging.error(f"NREL API request timed out on submit: {e}")
+        return jsonify({"error": "NREL API request timed out"}), 504
+    except requests.exceptions.ConnectTimeout as e:
+        logging.error(f"NREL API connect timed out on submit: {e}")
+        return jsonify({"error": "NREL API connect timed out"}), 504
     except requests.exceptions.HTTPError as e:
-        if resp.status_code == 400:
+        if getattr(resp, "status_code", None) == 400:
             error_detail = resp.text
             logging.error(f"NREL API 400 Bad Request on submit: {error_detail}")
             return jsonify({"error": "Bad Request from NREL API", "details": error_detail}), 400
@@ -155,62 +167,96 @@ def status(run_uuid):
     logging.info(f"Polling status for run_uuid: {run_uuid}")
     logging.info(f"Requesting results from {results_url}")
 
-    try:
-        headers = {
-            "User-Agent":   "VortxOpt/1.0",
-            "Accept":       "application/json",
-            "X-Api-Key":    NREL_API_KEY,
-        }
-        resp = requests.get(results_url, headers=headers)
-        logging.info(f"/results response status {resp.status_code} for run_uuid {run_uuid}")
-        if resp.status_code != 200:
-            logging.warning("/results response body: %s", _redact_api_key(resp.text))
-        resp.raise_for_status()
-        data = resp.json()
-    except requests.exceptions.HTTPError as e:
-        if resp.status_code == 429:
-            retry_after = int(resp.headers.get("Retry-After", "60"))
-            cooldowns[run_uuid] = time.time() + retry_after
-            logging.warning(f"NREL API rate limit hit for run_uuid {run_uuid}, retry after {retry_after}s")
-            return (
-                jsonify({"error": "Too Many Requests", "retry_after": retry_after}),
-                429,
-                {"Retry-After": str(retry_after)},
-            )
-        if resp.status_code == 400:
-            error_detail = _redact_api_key(resp.text)
-            logging.error("NREL API 400 Bad Request from /results: %s", error_detail)
-            return jsonify({"error": "Bad Request from NREL API", "details": error_detail}), 400
-        logging.error(
-            "HTTP error from NREL API on results: %s; status=%s body=%s",
-            e,
-            getattr(resp, "status_code", "N/A"),
-            _redact_api_key(getattr(resp, "text", "")),
-        )
-        return jsonify({"error": str(e)}), 502
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Request exception from NREL API on results: {e}")
-        return jsonify({"error": str(e)}), 502
-    except ValueError as e:
-        logging.error(f"Invalid JSON received from NREL API on results: {e}")
-        return jsonify({"error": "Invalid JSON received from NREL API"}), 502
+    headers = {
+        "User-Agent": "VortxOpt/1.0",
+        "Accept": "application/json",
+        "X-Api-Key": NREL_API_KEY,
+    }
 
-    status_val = data.get("status")
+    start_time = time.time()
+    data = None
+    status_val = None
+    # Poll for up to 5 minutes at 10-second intervals
+    while True:
+        try:
+            resp = requests.get(results_url, headers=headers, timeout=DEFAULT_TIMEOUT)
+            logging.info(f"/results response status {resp.status_code} for run_uuid {run_uuid}")
 
-    # Detect failure or error statuses
-    if status_val in ["Failed", "Error", "Cancelled"]:
+            if resp.status_code != 200:
+                logging.warning("/results response body: %s", _redact_api_key(resp.text))
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", "60"))
+                    cooldowns[run_uuid] = time.time() + retry_after
+                    logging.warning(f"NREL API rate limit hit for run_uuid {run_uuid}, retry after {retry_after}s")
+                    # Sleep for retry_after seconds before retrying
+                    time.sleep(retry_after)
+                    if time.time() - start_time >= 300:
+                        break
+                    continue
+                resp.raise_for_status()
+
+            data = resp.json()
+
+            # Determine status from possible fields
+            status_val = None
+            if isinstance(data, dict):
+                status_val = data.get("status")
+                if status_val is None and "outputs" in data:
+                    try:
+                        status_val = data["outputs"].get("Scenario", {}).get("status")
+                    except Exception:
+                        status_val = None
+
+            # If status indicates completion, break
+            if status_val and str(status_val).lower() not in ["optimizing...", "optimizing"]:
+                break
+
+            # Check max duration
+            if time.time() - start_time >= 300:
+                logging.info("Polling reached max duration of 300s; returning last response.")
+                break
+
+            time.sleep(10)
+        except requests.exceptions.Timeout as e:
+            logging.error(f"NREL API request timed out on results: {e}")
+            return jsonify({"error": "NREL API request timed out"}), 504
+        except requests.exceptions.ConnectTimeout as e:
+            logging.error(f"NREL API connect timed out on results: {e}")
+            return jsonify({"error": "NREL API connect timed out"}), 504
+        except requests.exceptions.HTTPError as e:
+            # Handle rate-limit here if available in the exception
+            resp_status = getattr(e, "response", None)
+            if resp_status is not None and getattr(resp_status, "status_code", None) == 429:
+                retry_after = int(getattr(resp_status.headers, "get", lambda k, d: d)("Retry-After", "60"))
+                cooldowns[run_uuid] = time.time() + retry_after
+                logging.warning(f"NREL API rate limit hit for run_uuid {run_uuid}, retry after {retry_after}s")
+                time.sleep(retry_after)
+                if time.time() - start_time >= 300:
+                    break
+                continue
+            logging.error(f"HTTP error from NREL API on results: {e}")
+            return jsonify({"error": str(e)}), 502
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Request exception from NREL API on results: {e}")
+            return jsonify({"error": str(e)}), 502
+        except ValueError as e:
+            logging.error(f"Invalid JSON received from NREL API on results: {e}")
+            return jsonify({"error": "Invalid JSON received from NREL API"}), 502
+
+    if data is None:
+        return jsonify({"error": "No response from NREL API"}), 502
+
+    # If the API reports a terminal status, propagate it with outputs if present
+    if status_val and str(status_val).lower() in ["failed", "error", "cancelled"]:
         error_message = data.get("message", f"Job failed with status: {status_val}")
         logging.error(f"NREL job {run_uuid} failed: {error_message}")
         return jsonify({"error": error_message, "status": status_val}), 200
 
-    if status_val.lower() in ["completed", "optimal"]:
+    if status_val and str(status_val).lower() in ["completed", "optimal"]:
         outputs = data.get("outputs")
         if outputs is None:
             logging.error(f"NREL API indicated completion but no outputs were returned for run_uuid {run_uuid}")
-            return (
-                jsonify({"error": "Outputs missing from NREL response", "status": status_val}),
-                502,
-            )
+            return jsonify({"error": "Outputs missing from NREL response", "status": status_val}), 502
         data["outputs"] = outputs
 
     return jsonify(data)
