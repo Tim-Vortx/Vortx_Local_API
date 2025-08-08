@@ -1,5 +1,90 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import minimalScenario from "./minimalScenario.json";
+import {
+  Container,
+  Typography,
+  TextField,
+  Button,
+  Box,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Paper,
+} from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+  ResponsiveContainer,
+} from "recharts";
+
+// colors for the chart lines
+const COLORS = [
+  "#8884d8",
+  "#82ca9d",
+  "#ff7300",
+  "#d0ed57",
+  "#a4de6c",
+  "#0088fe",
+  "#ff0000",
+];
+
+/** Recursively render the outputs object using MUI accordions */
+function RenderOutputs({ data }) {
+  if (data === null || data === undefined) return null;
+
+  if (typeof data !== "object" || Array.isArray(data)) {
+    // primitive or array
+    if (Array.isArray(data)) {
+      const text =
+        data.length > 50
+          ? JSON.stringify(data.slice(0, 50)) + " …" + ` (${data.length} items)`
+          : JSON.stringify(data);
+      return (
+        <Typography sx={{ whiteSpace: "pre-wrap" }}>{text}</Typography>
+      );
+    }
+    return <Typography>{String(data)}</Typography>;
+  }
+
+  return (
+    <Box>
+      {Object.entries(data).map(([key, value]) => (
+        <Accordion key={key} disableGutters>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography>{key}</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <RenderOutputs data={value} />
+          </AccordionDetails>
+        </Accordion>
+      ))}
+    </Box>
+  );
+}
+
+// Find all timeseries arrays (length 8760) within the outputs
+function extractTimeSeries(outputs) {
+  const series = [];
+  const walk = (obj, prefix = "") => {
+    if (!obj || typeof obj !== "object") return;
+    Object.entries(obj).forEach(([k, v]) => {
+      const path = prefix ? `${prefix}.${k}` : k;
+      if (Array.isArray(v) && v.length === 8760 && v.every((n) => typeof n === "number")) {
+        series.push({ key: path.replace(/\./g, "_"), label: path, values: v });
+      } else if (v && typeof v === "object") {
+        walk(v, path);
+      }
+    });
+  };
+  walk(outputs);
+  return series;
+}
 
 function App() {
   // Generate 8760 hourly load values
@@ -23,9 +108,9 @@ function App() {
 
   const [runUuid, setRunUuid] = useState(null);
   const [status, setStatus] = useState("");
-  const [queue, setQueue] = useState(null);
   const [outputs, setOutputs] = useState(null);
   const [error, setError] = useState("");
+  const [day, setDay] = useState(0); // day of year for chart
 
   // Polling configuration
   const baseDelay = parseInt(
@@ -154,25 +239,99 @@ function App() {
     return () => clearTimeout(timeoutId);
   }, [runUuid, baseDelay, maxWait]);
 
+  // Extract timeseries from outputs when available
+  const timeSeries = useMemo(() => (outputs ? extractTimeSeries(outputs) : []), [outputs]);
+
+  // Chart data for selected day
+  const chartData = useMemo(() => {
+    if (!timeSeries.length) return [];
+    const start = day * 24;
+    return Array.from({ length: 24 }, (_, hour) => {
+      const idx = start + hour;
+      const point = { hour };
+      timeSeries.forEach((ts) => {
+        point[ts.key] = ts.values[idx];
+      });
+      return point;
+    });
+  }, [timeSeries, day]);
+
   return (
-    <div style={{ padding: 20, fontFamily: "sans-serif" }}>
-      <h2>REopt MVP</h2>
-      <textarea
-        style={{ width: "100%", height: 200 }}
+    <Container sx={{ py: 4 }}>
+      <Typography variant="h4" gutterBottom>
+        REopt MVP
+      </Typography>
+      <TextField
+        label="Scenario"
+        multiline
+        minRows={10}
+        fullWidth
         value={scenario}
         onChange={(e) => setScenario(e.target.value)}
       />
-      <br />
-      <button onClick={submit}>Run REopt</button>
-      {error && <p style={{ color: "red" }}>Error: {error}</p>}
-      <p>Status: {status}</p>
-      {outputs && (
-        <pre style={{ background: "#f0f0f0", padding: 10 }}>
-          {JSON.stringify(outputs, null, 2)}
-        </pre>
+      <Box mt={2} mb={2}>
+        <Button variant="contained" onClick={submit}>
+          Run REopt
+        </Button>
+      </Box>
+      {error && (
+        <Typography color="error" gutterBottom>
+          Error: {error}
+        </Typography>
       )}
-    </div>
+      <Typography>Status: {status}</Typography>
+      {outputs && (
+        <Box mt={4}>
+          <Typography variant="h5" gutterBottom>
+            Outputs
+          </Typography>
+          <Box mb={4}>
+            <Typography variant="h6">Daily Operations</Typography>
+            {timeSeries.length > 0 ? (
+              <>
+                <TextField
+                  type="number"
+                  label="Day (0-364)"
+                  value={day}
+                  onChange={(e) =>
+                    setDay(
+                      Math.min(364, Math.max(0, parseInt(e.target.value || "0", 10)))
+                    )
+                  }
+                  sx={{ mb: 2 }}
+                />
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="hour" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    {timeSeries.map((ts, i) => (
+                      <Line
+                        type="monotone"
+                        key={ts.key}
+                        dataKey={ts.key}
+                        name={ts.label}
+                        stroke={COLORS[i % COLORS.length]}
+                        dot={false}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </>
+            ) : (
+              <Typography>No timeseries data available.</Typography>
+            )}
+          </Box>
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <RenderOutputs data={outputs} />
+          </Paper>
+        </Box>
+      )}
+    </Container>
   );
 }
 
 export default App;
+
