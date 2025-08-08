@@ -22,6 +22,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import {
   AreaChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -45,6 +46,7 @@ const COLORS = [
 const SERIES_MAP = {
   ElectricLoad_load_series_kw: "Site Load",
   ElectricUtility_electric_to_load_series_kw: "Utility Purchase",
+  ElectricUtility_export_series_kw: "Utility Export",
   PV_electric_to_load_series_kw: "Solar Serves Load",
   PV_electric_to_storage_series_kw: "Solar Charges BESS",
   PV_electric_to_grid_series_kw: "Solar Export",
@@ -565,7 +567,7 @@ function App() {
   // Extract timeseries from outputs when available
   const timeSeries = useMemo(() => {
     if (!outputs) return [];
-    return extractTimeSeries(outputs)
+    const base = extractTimeSeries(outputs)
       .filter((ts) => SERIES_MAP[ts.key])
       .map((ts) => {
         let label = SERIES_MAP[ts.key];
@@ -577,6 +579,19 @@ function App() {
         }
         return { ...ts, label };
       });
+    if (
+      base.some(
+        (ts) => ts.key === "ElectricUtility_electric_to_load_series_kw",
+      )
+    ) {
+      const len = base[0]?.values.length || 0;
+      base.push({
+        key: "ElectricUtility_export_series_kw",
+        label: SERIES_MAP["ElectricUtility_export_series_kw"],
+        values: Array(len).fill(0),
+      });
+    }
+    return base;
   }, [outputs, generatorFuelType]);
 
   // Chart data for selected day
@@ -589,6 +604,22 @@ function App() {
       timeSeries.forEach((ts) => {
         point[ts.key] = ts.values[idx];
       });
+      const load = point["ElectricLoad_load_series_kw"] || 0;
+      let served = 0;
+      Object.keys(point).forEach((k) => {
+        if (
+          k.endsWith("_electric_to_load_series_kw") &&
+          k !== "ElectricUtility_electric_to_load_series_kw"
+        ) {
+          served += point[k];
+        }
+      });
+      const utility = load - served;
+      point["ElectricUtility_electric_to_load_series_kw"] = Math.max(
+        utility,
+        0,
+      );
+      point["ElectricUtility_export_series_kw"] = Math.min(utility, 0);
       return point;
     });
   }, [timeSeries, day]);
@@ -998,17 +1029,30 @@ function App() {
                         <YAxis />
                         <Tooltip />
                         <Legend />
-                        {timeSeries.map((ts, i) => (
-                          <Area
-                            type="monotone"
-                            key={ts.key}
-                            dataKey={ts.key}
-                            name={ts.label}
-                            stroke={COLORS[i % COLORS.length]}
-                            fill={COLORS[i % COLORS.length]}
-                            stackId="1"
-                          />
-                        ))}
+                        {timeSeries
+                          .filter((ts) => ts.key !== "ElectricLoad_load_series_kw")
+                          .map((ts, i) => (
+                            <Area
+                              type="monotone"
+                              key={ts.key}
+                              dataKey={ts.key}
+                              name={ts.label}
+                              stroke={COLORS[(i + 1) % COLORS.length]}
+                              fill={COLORS[(i + 1) % COLORS.length]}
+                              stackId={
+                                ts.key === "ElectricUtility_export_series_kw"
+                                  ? "2"
+                                  : "1"
+                              }
+                            />
+                          ))}
+                        <Line
+                          type="monotone"
+                          dataKey="ElectricLoad_load_series_kw"
+                          name="Site Load"
+                          stroke={COLORS[0]}
+                          dot={false}
+                        />
                       </AreaChart>
                     </ResponsiveContainer>
                   </>
