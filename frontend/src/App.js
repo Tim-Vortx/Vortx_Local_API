@@ -52,9 +52,7 @@ function RenderOutputs({ data }) {
         data.length > 50
           ? JSON.stringify(data.slice(0, 50)) + " …" + ` (${data.length} items)`
           : JSON.stringify(data);
-      return (
-        <Typography sx={{ whiteSpace: "pre-wrap" }}>{text}</Typography>
-      );
+      return <Typography sx={{ whiteSpace: "pre-wrap" }}>{text}</Typography>;
     }
     return <Typography>{String(data)}</Typography>;
   }
@@ -82,7 +80,11 @@ function extractTimeSeries(outputs) {
     if (!obj || typeof obj !== "object") return;
     Object.entries(obj).forEach(([k, v]) => {
       const path = prefix ? `${prefix}.${k}` : k;
-      if (Array.isArray(v) && v.length === 8760 && v.every((n) => typeof n === "number")) {
+      if (
+        Array.isArray(v) &&
+        v.length === 8760 &&
+        v.every((n) => typeof n === "number")
+      ) {
         series.push({ key: path.replace(/\./g, "_"), label: path, values: v });
       } else if (v && typeof v === "object") {
         walk(v, path);
@@ -121,7 +123,7 @@ function parseLoadCsv(text) {
     const hourly = [];
     for (let i = 0; i < values.length; i += 4) {
       hourly.push(
-        (values[i] + values[i + 1] + values[i + 2] + values[i + 3]) / 4
+        (values[i] + values[i + 1] + values[i + 2] + values[i + 3]) / 4,
       );
     }
     return { year, loads: hourly };
@@ -142,36 +144,42 @@ function summarizeLoads(arr) {
 
 function App() {
   const [location, setLocation] = useState("");
-  const [annualKwh, setAnnualKwh] = useState(minimalScenario.ElectricLoad.annual_kwh);
-  const [doeRefName, setDoeRefName] = useState(minimalScenario.ElectricLoad.doe_reference_name);
+  const [annualKwh, setAnnualKwh] = useState(
+    minimalScenario.ElectricLoad.annual_kwh,
+  );
+  const [doeRefName, setDoeRefName] = useState(
+    minimalScenario.ElectricLoad.doe_reference_name,
+  );
   const [pvMaxKw, setPvMaxKw] = useState(0);
-  const [pvCost, setPvCost] = useState(minimalScenario.PV.installed_cost_per_kw);
+  const [pvCost, setPvCost] = useState(
+    minimalScenario.PV.installed_cost_per_kw,
+  );
   const [storageMaxKw, setStorageMaxKw] = useState(0);
   const [storageMaxKwh, setStorageMaxKwh] = useState(0);
 
   const [generatorMaxKw, setGeneratorMaxKw] = useState(0);
-  const [generatorFuelCostPerGallon, setGeneratorFuelCostPerGallon] = useState(3);
+  const [generatorFuelCostPerGallon, setGeneratorFuelCostPerGallon] =
+    useState(3);
   const [generatorFuelCostPerMmbtu, setGeneratorFuelCostPerMmbtu] = useState(6);
   const [generatorFuelType, setGeneratorFuelType] = useState("diesel");
 
   const [energyRate, setEnergyRate] = useState(
-    minimalScenario.ElectricTariff.blended_annual_energy_rate
+    minimalScenario.ElectricTariff.blended_annual_energy_rate,
   );
   const [demandRate, setDemandRate] = useState(
-    minimalScenario.ElectricTariff.blended_annual_demand_rate
+    minimalScenario.ElectricTariff.blended_annual_demand_rate,
   );
   const [offGrid, setOffGrid] = useState(false);
 
   const initialLoads = useMemo(
-    () =>
-      Array(8760).fill(
-        minimalScenario.ElectricLoad.annual_kwh / 8760
-      ),
-    []
+    () => Array(8760).fill(minimalScenario.ElectricLoad.annual_kwh / 8760),
+    [],
   );
   const [loads, setLoads] = useState(initialLoads);
   const [loadYear, setLoadYear] = useState(2017);
-  const [loadSummary, setLoadSummary] = useState(() => summarizeLoads(initialLoads));
+  const [loadSummary, setLoadSummary] = useState(() =>
+    summarizeLoads(initialLoads),
+  );
   const [loadTab, setLoadTab] = useState(0);
   const [loadFileName, setLoadFileName] = useState("");
   const [peakLoad, setPeakLoad] = useState(0);
@@ -188,11 +196,11 @@ function App() {
   // Polling configuration
   const baseDelay = parseInt(
     process.env.REACT_APP_POLL_BASE_DELAY || "5000",
-    10
+    10,
   );
   const maxWait = parseInt(
     process.env.REACT_APP_MAX_POLL_TIME || String(5 * 60 * 1000),
-    10
+    10,
   );
 
   useEffect(() => {
@@ -244,17 +252,6 @@ function App() {
     setError("");
     setOutputs(null);
     setRunUuid(null);
-    const scenario = {
-      Site: { latitude: parseFloat(lat), longitude: parseFloat(lon) },
-      ElectricLoad: {
-        year: loadYear,
-        loads_kw: loads,
-        annual_kwh: loadSummary.total,
-        doe_reference_name: doeRefName,
-      },
-
-    const hourlyLoads = Array(8760).fill(parseFloat(annualKwh) / 8760);
-
     // Geocode the user-provided location into latitude and longitude
     let lat = null;
     let lon = null;
@@ -265,7 +262,7 @@ function App() {
     }
     try {
       const geoRes = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(location)}`
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(location)}`,
       );
       const geoData = await geoRes.json();
       if (!geoData.length) {
@@ -283,7 +280,12 @@ function App() {
 
     const scenario = {
       Site: { latitude: lat, longitude: lon },
-      ElectricLoad: { year: 2017, loads_kw: hourlyLoads },
+      ElectricLoad: {
+        year: loadYear,
+        loads_kw: loads,
+        annual_kwh: loadSummary.total,
+        doe_reference_name: doeRefName,
+      },
       ElectricTariff: {
         blended_annual_energy_rate: parseFloat(energyRate),
         blended_annual_demand_rate: parseFloat(demandRate),
@@ -336,7 +338,6 @@ function App() {
         setStatus("Error");
         return;
       }
-      console.log("Submit response:", data);
       const { run_uuid } = data;
       if (!run_uuid) {
         setError("No run_uuid returned");
@@ -362,7 +363,9 @@ function App() {
 
     const poll = async () => {
       if (Date.now() - startTime >= maxWait) {
-        setError(`Polling timed out after ${Math.round(maxWait / 1000)} seconds.`);
+        setError(
+          `Polling timed out after ${Math.round(maxWait / 1000)} seconds.`,
+        );
         setStatus("Timeout");
         return;
       }
@@ -387,8 +390,6 @@ function App() {
           setStatus("Error");
           return;
         }
-        console.log("Polling response:", data); // Log full response for debugging
-
         const s = data?.status || data?.data?.status || "";
         setStatus(s);
 
@@ -413,7 +414,10 @@ function App() {
   }, [runUuid, baseDelay, maxWait]);
 
   // Extract timeseries from outputs when available
-  const timeSeries = useMemo(() => (outputs ? extractTimeSeries(outputs) : []), [outputs]);
+  const timeSeries = useMemo(
+    () => (outputs ? extractTimeSeries(outputs) : []),
+    [outputs],
+  );
 
   // Chart data for selected day
   const chartData = useMemo(() => {
@@ -440,7 +444,9 @@ function App() {
       {tab === 0 && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <Card>
-            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <CardContent
+              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+            >
               <Typography variant="h6">Site</Typography>
               <TextField
                 label="Address or Zip Code"
@@ -451,7 +457,9 @@ function App() {
             </CardContent>
           </Card>
           <Card>
-            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <CardContent
+              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+            >
               <Typography variant="h6">Load Profile</Typography>
               <Tabs value={loadTab} onChange={(e, v) => setLoadTab(v)}>
                 <Tab label="Upload CSV" />
@@ -523,7 +531,9 @@ function App() {
             </CardContent>
           </Card>
           <Card>
-            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <CardContent
+              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+            >
               <Typography variant="h6">Utility Inputs</Typography>
               <TextField
                 label="Energy Rate ($/kWh)"
@@ -541,14 +551,19 @@ function App() {
               />
               <FormControlLabel
                 control={
-                  <Checkbox checked={offGrid} onChange={(e) => setOffGrid(e.target.checked)} />
+                  <Checkbox
+                    checked={offGrid}
+                    onChange={(e) => setOffGrid(e.target.checked)}
+                  />
                 }
                 label="Off Grid"
               />
             </CardContent>
           </Card>
           <Card>
-            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <CardContent
+              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+            >
               <Typography variant="h6">Solar</Typography>
               <TextField
                 label="Max kW"
@@ -560,7 +575,9 @@ function App() {
             </CardContent>
           </Card>
           <Card>
-            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <CardContent
+              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+            >
               <Typography variant="h6">Battery Storage</Typography>
               <TextField
                 label="Max kW"
@@ -579,7 +596,9 @@ function App() {
             </CardContent>
           </Card>
           <Card>
-            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <CardContent
+              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+            >
               <Typography variant="h6">Generators</Typography>
               <TextField
                 label="Max kW"
@@ -597,12 +616,16 @@ function App() {
               >
                 <MenuItem value="diesel">Diesel</MenuItem>
                 <MenuItem value="natural_gas">Natural Gas</MenuItem>
-                <MenuItem value="diesel_and_natural_gas">Diesel &amp; Natural Gas</MenuItem>
+                <MenuItem value="diesel_and_natural_gas">
+                  Diesel &amp; Natural Gas
+                </MenuItem>
               </TextField>
             </CardContent>
           </Card>
           <Card>
-            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <CardContent
+              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+            >
               <Typography variant="h6">Cost Estimates</Typography>
               <TextField
                 label="PV Cost per kW ($)"
@@ -617,7 +640,9 @@ function App() {
                   type="number"
                   fullWidth
                   value={generatorFuelCostPerGallon}
-                  onChange={(e) => setGeneratorFuelCostPerGallon(e.target.value)}
+                  onChange={(e) =>
+                    setGeneratorFuelCostPerGallon(e.target.value)
+                  }
                 />
               )}
               {generatorFuelType === "natural_gas" && (
@@ -636,7 +661,9 @@ function App() {
                     type="number"
                     fullWidth
                     value={generatorFuelCostPerGallon}
-                    onChange={(e) => setGeneratorFuelCostPerGallon(e.target.value)}
+                    onChange={(e) =>
+                      setGeneratorFuelCostPerGallon(e.target.value)
+                    }
                     sx={{ mb: 2 }}
                   />
                   <TextField
@@ -644,7 +671,9 @@ function App() {
                     type="number"
                     fullWidth
                     value={generatorFuelCostPerMmbtu}
-                    onChange={(e) => setGeneratorFuelCostPerMmbtu(e.target.value)}
+                    onChange={(e) =>
+                      setGeneratorFuelCostPerMmbtu(e.target.value)
+                    }
                   />
                 </>
               )}
@@ -680,13 +709,19 @@ function App() {
                       value={day}
                       onChange={(e) =>
                         setDay(
-                          Math.min(364, Math.max(0, parseInt(e.target.value || "0", 10)))
+                          Math.min(
+                            364,
+                            Math.max(0, parseInt(e.target.value || "0", 10)),
+                          ),
                         )
                       }
                       sx={{ mb: 2 }}
                     />
                     <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                      <LineChart
+                        data={chartData}
+                        margin={{ top: 5, right: 20, bottom: 5, left: 0 }}
+                      >
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="hour" />
                         <YAxis />
@@ -721,4 +756,3 @@ function App() {
 }
 
 export default App;
-
