@@ -102,10 +102,20 @@ function extractTimeSeries(outputs) {
       const path = prefix ? `${prefix}.${k}` : k;
       if (
         Array.isArray(v) &&
-        v.length === 8760 &&
+        (v.length === 8760 || v.length === 35040) &&
         v.every((n) => typeof n === "number")
       ) {
-        series.push({ key: path.replace(/\./g, "_"), label: path, values: v });
+        // If 35040 samples (15-min resolution), convert to hourly by averaging every 4 samples
+        const hourly =
+          v.length === 35040
+            ? Array.from({ length: 8760 }, (_, idx) => {
+                const base = idx * 4;
+                return (
+                  (v[base] + v[base + 1] + v[base + 2] + v[base + 3]) / 4
+                );
+              })
+            : v;
+        series.push({ key: path.replace(/\./g, "_"), label: path, values: hourly });
       } else if (v && typeof v === "object") {
         walk(v, path);
       }
