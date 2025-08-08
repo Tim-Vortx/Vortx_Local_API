@@ -20,8 +20,8 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
@@ -30,7 +30,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-// colors for the chart lines
+// colors for the chart series
 const COLORS = [
   "#8884d8",
   "#82ca9d",
@@ -40,6 +40,26 @@ const COLORS = [
   "#0088fe",
   "#ff0000",
 ];
+
+// Mapping of timeseries keys to human-readable labels for the chart
+const SERIES_MAP = {
+  ElectricLoad_load_series_kw: "Site Load",
+  ElectricUtility_electric_to_load_series_kw: "Utility Purchase",
+  PV_electric_to_load_series_kw: "Solar Serves Load",
+  PV_electric_to_storage_series_kw: "Solar Charges BESS",
+  PV_electric_to_grid_series_kw: "Solar Export",
+  ElectricStorage_electric_to_load_series_kw: "BESS Serves Load",
+  ElectricStorage_electric_to_grid_series_kw: "BESS Export",
+  Generator_electric_to_load_series_kw: "NG Generator Serves Load",
+  Generator_electric_to_storage_series_kw: "NG Generator Charges BESS",
+  Generator_electric_to_grid_series_kw: "NG Generator Export",
+  NGGenerator_electric_to_load_series_kw: "NG Generator Serves Load",
+  NGGenerator_electric_to_storage_series_kw: "NG Generator Charges BESS",
+  NGGenerator_electric_to_grid_series_kw: "NG Generator Export",
+  DieselGenerator_electric_to_load_series_kw: "Diesel Generator Serves Load",
+  DieselGenerator_electric_to_storage_series_kw:
+    "Diesel Generator Charges BESS",
+};
 
 /** Recursively render the outputs object using MUI accordions */
 function RenderOutputs({ data }) {
@@ -157,11 +177,21 @@ function App() {
   const [storageMaxKw, setStorageMaxKw] = useState(0);
   const [storageMaxKwh, setStorageMaxKwh] = useState(0);
 
+  const [usePv, setUsePv] = useState(false);
+  const [useStorage, setUseStorage] = useState(false);
+  const [useGenerator, setUseGenerator] = useState(false);
+
   const [generatorMaxKw, setGeneratorMaxKw] = useState(0);
   const [generatorFuelCostPerGallon, setGeneratorFuelCostPerGallon] =
     useState(3);
   const [generatorFuelCostPerMmbtu, setGeneratorFuelCostPerMmbtu] = useState(6);
   const [generatorFuelType, setGeneratorFuelType] = useState("diesel");
+
+  const [bessCanExport, setBessCanExport] = useState(false);
+  const [bessSolarOnly, setBessSolarOnly] = useState(false);
+  const [solarCanExport, setSolarCanExport] = useState(false);
+  const [genCanExport, setGenCanExport] = useState(false);
+  const [genChargeBess, setGenChargeBess] = useState(false);
 
   const [energyRate, setEnergyRate] = useState(
     minimalScenario.ElectricTariff.blended_annual_energy_rate,
@@ -295,15 +325,29 @@ function App() {
         blended_annual_demand_rate: parseFloat(demandRate),
       },
       ElectricUtility: minimalScenario.ElectricUtility,
-      PV: {
+      Financial: minimalScenario.Financial,
+      Settings: { off_grid_flag: offGrid },
+    };
+
+    if (usePv) {
+      scenario.PV = {
         max_kw: parseFloat(pvMaxKw),
         installed_cost_per_kw: parseFloat(pvCost),
-      },
-      ElectricStorage: {
+        can_export: solarCanExport,
+      };
+    }
+
+    if (useStorage) {
+      scenario.ElectricStorage = {
         max_kw: parseFloat(storageMaxKw),
         max_kwh: parseFloat(storageMaxKwh),
-      },
-      Generator: {
+        can_export: bessCanExport,
+        charge_from_pv_only: bessSolarOnly,
+      };
+    }
+
+    if (useGenerator) {
+      scenario.Generator = {
         max_kw: parseFloat(generatorMaxKw),
         ...(generatorFuelType !== "natural_gas"
           ? { fuel_cost_per_gallon: parseFloat(generatorFuelCostPerGallon) }
@@ -312,10 +356,10 @@ function App() {
           ? { fuel_cost_per_mmbtu: parseFloat(generatorFuelCostPerMmbtu) }
           : {}),
         fuel_type: generatorFuelType,
-      },
-      Financial: minimalScenario.Financial,
-      Settings: { off_grid_flag: offGrid },
-    };
+        can_export: genCanExport,
+        can_charge_storage: genChargeBess,
+      };
+    }
 
     setStatus("Submitting…");
     try {
@@ -418,10 +462,21 @@ function App() {
   }, [runUuid, baseDelay, maxWait]);
 
   // Extract timeseries from outputs when available
-  const timeSeries = useMemo(
-    () => (outputs ? extractTimeSeries(outputs) : []),
-    [outputs],
-  );
+  const timeSeries = useMemo(() => {
+    if (!outputs) return [];
+    return extractTimeSeries(outputs)
+      .filter((ts) => SERIES_MAP[ts.key])
+      .map((ts) => {
+        let label = SERIES_MAP[ts.key];
+        if (
+          ts.key.startsWith("Generator_") &&
+          generatorFuelType === "diesel"
+        ) {
+          label = label.replace("NG Generator", "Diesel Generator");
+        }
+        return { ...ts, label };
+      });
+  }, [outputs, generatorFuelType]);
 
   // Chart data for selected day
   const chartData = useMemo(() => {
@@ -553,77 +608,107 @@ function App() {
                 value={demandRate}
                 onChange={(e) => setDemandRate(e.target.value)}
               />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent
+              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+            >
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={offGrid}
-                    onChange={(e) => setOffGrid(e.target.checked)}
+                    checked={usePv}
+                    onChange={(e) => setUsePv(e.target.checked)}
                   />
                 }
-                label="Off Grid"
+                label="Include Solar"
               />
+              {usePv && (
+                <>
+                  <Typography variant="h6">Solar</Typography>
+                  <TextField
+                    label="Max kW"
+                    type="number"
+                    fullWidth
+                    value={pvMaxKw}
+                    onChange={(e) => setPvMaxKw(e.target.value)}
+                  />
+                </>
+              )}
             </CardContent>
           </Card>
           <Card>
             <CardContent
               sx={{ display: "flex", flexDirection: "column", gap: 2 }}
             >
-              <Typography variant="h6">Solar</Typography>
-              <TextField
-                label="Max kW"
-                type="number"
-                fullWidth
-                value={pvMaxKw}
-                onChange={(e) => setPvMaxKw(e.target.value)}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={useStorage}
+                    onChange={(e) => setUseStorage(e.target.checked)}
+                  />
+                }
+                label="Include Battery Storage"
               />
+              {useStorage && (
+                <>
+                  <Typography variant="h6">Battery Storage</Typography>
+                  <TextField
+                    label="Max kW"
+                    type="number"
+                    fullWidth
+                    value={storageMaxKw}
+                    onChange={(e) => setStorageMaxKw(e.target.value)}
+                  />
+                  <TextField
+                    label="Max kWh"
+                    type="number"
+                    fullWidth
+                    value={storageMaxKwh}
+                    onChange={(e) => setStorageMaxKwh(e.target.value)}
+                  />
+                </>
+              )}
             </CardContent>
           </Card>
           <Card>
             <CardContent
               sx={{ display: "flex", flexDirection: "column", gap: 2 }}
             >
-              <Typography variant="h6">Battery Storage</Typography>
-              <TextField
-                label="Max kW"
-                type="number"
-                fullWidth
-                value={storageMaxKw}
-                onChange={(e) => setStorageMaxKw(e.target.value)}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={useGenerator}
+                    onChange={(e) => setUseGenerator(e.target.checked)}
+                  />
+                }
+                label="Include Generators"
               />
-              <TextField
-                label="Max kWh"
-                type="number"
-                fullWidth
-                value={storageMaxKwh}
-                onChange={(e) => setStorageMaxKwh(e.target.value)}
-              />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent
-              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
-            >
-              <Typography variant="h6">Generators</Typography>
-              <TextField
-                label="Max kW"
-                type="number"
-                fullWidth
-                value={generatorMaxKw}
-                onChange={(e) => setGeneratorMaxKw(e.target.value)}
-              />
-              <TextField
-                select
-                label="Fuel Type"
-                fullWidth
-                value={generatorFuelType}
-                onChange={(e) => setGeneratorFuelType(e.target.value)}
-              >
-                <MenuItem value="diesel">Diesel</MenuItem>
-                <MenuItem value="natural_gas">Natural Gas</MenuItem>
-                <MenuItem value="diesel_and_natural_gas">
-                  Diesel &amp; Natural Gas
-                </MenuItem>
-              </TextField>
+              {useGenerator && (
+                <>
+                  <Typography variant="h6">Generators</Typography>
+                  <TextField
+                    label="Max kW"
+                    type="number"
+                    fullWidth
+                    value={generatorMaxKw}
+                    onChange={(e) => setGeneratorMaxKw(e.target.value)}
+                  />
+                  <TextField
+                    select
+                    label="Fuel Type"
+                    fullWidth
+                    value={generatorFuelType}
+                    onChange={(e) => setGeneratorFuelType(e.target.value)}
+                  >
+                    <MenuItem value="diesel">Diesel</MenuItem>
+                    <MenuItem value="natural_gas">Natural Gas</MenuItem>
+                    <MenuItem value="diesel_and_natural_gas">
+                      Diesel &amp; Natural Gas
+                    </MenuItem>
+                  </TextField>
+                </>
+              )}
             </CardContent>
           </Card>
           <Card>
@@ -631,14 +716,16 @@ function App() {
               sx={{ display: "flex", flexDirection: "column", gap: 2 }}
             >
               <Typography variant="h6">Cost Estimates</Typography>
-              <TextField
-                label="PV Cost per kW ($)"
-                type="number"
-                fullWidth
-                value={pvCost}
-                onChange={(e) => setPvCost(e.target.value)}
-              />
-              {generatorFuelType === "diesel" && (
+              {usePv && (
+                <TextField
+                  label="PV Cost per kW ($)"
+                  type="number"
+                  fullWidth
+                  value={pvCost}
+                  onChange={(e) => setPvCost(e.target.value)}
+                />
+              )}
+              {useGenerator && generatorFuelType === "diesel" && (
                 <TextField
                   label="Generator Fuel Cost ($/gal)"
                   type="number"
@@ -649,7 +736,7 @@ function App() {
                   }
                 />
               )}
-              {generatorFuelType === "natural_gas" && (
+              {useGenerator && generatorFuelType === "natural_gas" && (
                 <TextField
                   label="Generator Fuel Cost ($/MMBtu)"
                   type="number"
@@ -658,29 +745,91 @@ function App() {
                   onChange={(e) => setGeneratorFuelCostPerMmbtu(e.target.value)}
                 />
               )}
-              {generatorFuelType === "diesel_and_natural_gas" && (
-                <>
-                  <TextField
-                    label="Diesel Fuel Cost ($/gal)"
-                    type="number"
-                    fullWidth
-                    value={generatorFuelCostPerGallon}
-                    onChange={(e) =>
-                      setGeneratorFuelCostPerGallon(e.target.value)
-                    }
-                    sx={{ mb: 2 }}
+              {useGenerator &&
+                generatorFuelType === "diesel_and_natural_gas" && (
+                  <>
+                    <TextField
+                      label="Diesel Fuel Cost ($/gal)"
+                      type="number"
+                      fullWidth
+                      value={generatorFuelCostPerGallon}
+                      onChange={(e) =>
+                        setGeneratorFuelCostPerGallon(e.target.value)
+                      }
+                      sx={{ mb: 2 }}
+                    />
+                    <TextField
+                      label="Natural Gas Fuel Cost ($/MMBtu)"
+                      type="number"
+                      fullWidth
+                      value={generatorFuelCostPerMmbtu}
+                      onChange={(e) =>
+                        setGeneratorFuelCostPerMmbtu(e.target.value)
+                      }
+                    />
+                  </>
+                )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent
+              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+            >
+              <Typography variant="h6">Operations</Typography>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={offGrid}
+                    onChange={(e) => setOffGrid(e.target.checked)}
                   />
-                  <TextField
-                    label="Natural Gas Fuel Cost ($/MMBtu)"
-                    type="number"
-                    fullWidth
-                    value={generatorFuelCostPerMmbtu}
-                    onChange={(e) =>
-                      setGeneratorFuelCostPerMmbtu(e.target.value)
-                    }
+                }
+                label="Off Grid"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={bessCanExport}
+                    onChange={(e) => setBessCanExport(e.target.checked)}
                   />
-                </>
-              )}
+                }
+                label="BESS can Export"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={bessSolarOnly}
+                    onChange={(e) => setBessSolarOnly(e.target.checked)}
+                  />
+                }
+                label="BESS charges from Solar only"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={solarCanExport}
+                    onChange={(e) => setSolarCanExport(e.target.checked)}
+                  />
+                }
+                label="Solar can Export"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={genCanExport}
+                    onChange={(e) => setGenCanExport(e.target.checked)}
+                  />
+                }
+                label="Generator can Export"
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={genChargeBess}
+                    onChange={(e) => setGenChargeBess(e.target.checked)}
+                  />
+                }
+                label="Generator can charge BESS"
+              />
             </CardContent>
           </Card>
           <Box mt={2} mb={2}>
@@ -722,7 +871,7 @@ function App() {
                       sx={{ mb: 2 }}
                     />
                     <ResponsiveContainer width="100%" height={300}>
-                      <LineChart
+                      <AreaChart
                         data={chartData}
                         margin={{ top: 5, right: 20, bottom: 5, left: 0 }}
                       >
@@ -732,16 +881,17 @@ function App() {
                         <Tooltip />
                         <Legend />
                         {timeSeries.map((ts, i) => (
-                          <Line
+                          <Area
                             type="monotone"
                             key={ts.key}
                             dataKey={ts.key}
                             name={ts.label}
                             stroke={COLORS[i % COLORS.length]}
-                            dot={false}
+                            fill={COLORS[i % COLORS.length]}
+                            stackId="1"
                           />
                         ))}
-                      </LineChart>
+                      </AreaChart>
                     </ResponsiveContainer>
                   </>
                 ) : (
