@@ -141,8 +141,8 @@ function summarizeLoads(arr) {
 }
 
 function App() {
-  const [lat, setLat] = useState(minimalScenario.Site.latitude);
-  const [lon, setLon] = useState(minimalScenario.Site.longitude);
+  const [location, setLocation] = useState("");
+  const [annualKwh, setAnnualKwh] = useState(minimalScenario.ElectricLoad.annual_kwh);
   const [doeRefName, setDoeRefName] = useState(minimalScenario.ElectricLoad.doe_reference_name);
   const [pvMaxKw, setPvMaxKw] = useState(0);
   const [pvCost, setPvCost] = useState(minimalScenario.PV.installed_cost_per_kw);
@@ -252,6 +252,38 @@ function App() {
         annual_kwh: loadSummary.total,
         doe_reference_name: doeRefName,
       },
+
+    const hourlyLoads = Array(8760).fill(parseFloat(annualKwh) / 8760);
+
+    // Geocode the user-provided location into latitude and longitude
+    let lat = null;
+    let lon = null;
+    if (!location.trim()) {
+      setError("Location is required");
+      setStatus("Error");
+      return;
+    }
+    try {
+      const geoRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(location)}`
+      );
+      const geoData = await geoRes.json();
+      if (!geoData.length) {
+        setError("Location not found");
+        setStatus("Error");
+        return;
+      }
+      lat = parseFloat(geoData[0].lat);
+      lon = parseFloat(geoData[0].lon);
+    } catch (e) {
+      setError(`Geocoding failed: ${e.message}`);
+      setStatus("Error");
+      return;
+    }
+
+    const scenario = {
+      Site: { latitude: lat, longitude: lon },
+      ElectricLoad: { year: 2017, loads_kw: hourlyLoads },
       ElectricTariff: {
         blended_annual_energy_rate: parseFloat(energyRate),
         blended_annual_demand_rate: parseFloat(demandRate),
@@ -411,18 +443,10 @@ function App() {
             <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <Typography variant="h6">Site</Typography>
               <TextField
-                label="Latitude"
-                type="number"
+                label="Address or Zip Code"
                 fullWidth
-                value={lat}
-                onChange={(e) => setLat(e.target.value)}
-              />
-              <TextField
-                label="Longitude"
-                type="number"
-                fullWidth
-                value={lon}
-                onChange={(e) => setLon(e.target.value)}
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
               />
             </CardContent>
           </Card>
