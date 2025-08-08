@@ -429,7 +429,7 @@ function App() {
       }
 
       try {
-        const res = await fetch(`/status/${runUuid}`, {
+        const res = await fetch(`/status/${encodeURIComponent(runUuid)}`, {
           headers: {},
         });
         const text = await res.text();
@@ -438,7 +438,13 @@ function App() {
           data = JSON.parse(text);
         } catch {}
         if (!res.ok) {
-          const message = (data && data.error) || text || res.statusText;
+          console.error("Status request failed", {
+            runUuid,
+            status: res.status,
+            body: text,
+          });
+          const body = (data && data.error) || text || res.statusText;
+          const message = `Status check failed for run ${runUuid} (HTTP ${res.status}): ${body}`;
           setError(message);
           setStatus("Error");
           return;
