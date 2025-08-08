@@ -26,7 +26,7 @@ API_URL = "https://developer.nrel.gov/api/reopt/v3/"
 NREL_API_KEY = os.getenv("NREL_API_KEY")
 
 def _extract_support_id(body: str) -> str | None:
-    match = re.search(r"support ID is: (\d+)", body, re.IGNORECASE)
+    match = re.search(r"support ID is: (\\d+)", body, re.IGNORECASE)
     return match.group(1) if match else None
 
 
@@ -38,9 +38,9 @@ def _redact_api_key(data):
         try:
             parsed = json.loads(data)
         except ValueError:
-            text = re.sub(r'"api_key"\s*:\s*"[^"\\]*",\s*', "", data)
-            text = re.sub(r',\s*"api_key"\s*:\s*"[^"\\]*"', "", text)
-            text = re.sub(r'"api_key"\s*:\s*"[^"\\]*"', "", text)
+            text = re.sub(r'"api_key"\\s*:\\s*"[^"\\\\]*",\\s*', "", data)
+            text = re.sub(r',\\s*"api_key"\\s*:\\s*"[^"\\\\]*"', "", text)
+            text = re.sub(r'"api_key"\\s*:\\s*"[^"\\\\]*"', "", text)
             return text
         else:
             redacted = _redact_api_key(parsed)
@@ -62,6 +62,22 @@ def submit():
     try:
         scenario = request.get_json()
         logging.info(f"Received scenario for submission: {scenario}")
+
+        # Basic input validation before logging and forwarding
+        # Validate top-level blocks
+        site = scenario.get("Site")
+        el_load = scenario.get("ElectricLoad", {})
+        loads_kw = el_load.get("loads_kw") if isinstance(el_load, dict) else None
+
+        if not site or not isinstance(site, dict) or \
+           "latitude" not in site or "longitude" not in site:
+            logging.error("Invalid or missing Site information: %s", site)
+            return jsonify({"error": "Invalid or missing Site information"}), 400
+
+        if not isinstance(loads_kw, list) or len(loads_kw) != 8760:
+            logging.error("Invalid ElectricLoad.loads_kw: expected 8760 hourly values, got %s", 
+                          type(loads_kw).__name__ if loads_kw is not None else loads_kw)
+            return jsonify({"error": "ElectricLoad.loads_kw must contain exactly 8760 hourly values"}), 400
 
         # Persist the latest scenario to disk for debugging/analysis
         log_dir = os.path.join(os.path.dirname(__file__), "logs")

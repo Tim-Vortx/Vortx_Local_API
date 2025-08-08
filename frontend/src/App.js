@@ -244,25 +244,15 @@ function App() {
     setError("");
     setOutputs(null);
     setRunUuid(null);
-    const scenario = {
-      Site: { latitude: parseFloat(lat), longitude: parseFloat(lon) },
-      ElectricLoad: {
-        year: loadYear,
-        loads_kw: loads,
-        annual_kwh: loadSummary.total,
-        doe_reference_name: doeRefName,
-      },
-
-    const hourlyLoads = Array(8760).fill(parseFloat(annualKwh) / 8760);
 
     // Geocode the user-provided location into latitude and longitude
-    let lat = null;
-    let lon = null;
     if (!location.trim()) {
       setError("Location is required");
       setStatus("Error");
       return;
     }
+    let lat = null;
+    let lon = null;
     try {
       const geoRes = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(location)}`
@@ -281,9 +271,17 @@ function App() {
       return;
     }
 
+    // Build hourly loads (8760 values)
+    const hourlyLoads = Array(8760).fill(parseFloat(annualKwh) / 8760);
+
     const scenario = {
       Site: { latitude: lat, longitude: lon },
-      ElectricLoad: { year: 2017, loads_kw: hourlyLoads },
+      ElectricLoad: {
+        year: loadYear,
+        loads_kw: hourlyLoads,
+        annual_kwh: loadSummary.total,
+        doe_reference_name: doeRefName,
+      },
       ElectricTariff: {
         blended_annual_energy_rate: parseFloat(energyRate),
         blended_annual_demand_rate: parseFloat(demandRate),
@@ -352,7 +350,7 @@ function App() {
     }
   };
 
-  // Poll for status with backoff once we have a runUuid
+  // Polling for status
   useEffect(() => {
     if (!runUuid) return;
 
@@ -398,7 +396,7 @@ function App() {
           return;
         }
 
-        // Always apply exponential backoff up to maxWait to avoid excessive polling
+        // Exponential backoff
         delay = Math.min(delay * 2, maxWait);
       } catch (e) {
         setError(e.message);
@@ -597,7 +595,7 @@ function App() {
               >
                 <MenuItem value="diesel">Diesel</MenuItem>
                 <MenuItem value="natural_gas">Natural Gas</MenuItem>
-                <MenuItem value="diesel_and_natural_gas">Diesel &amp; Natural Gas</MenuItem>
+                <MenuItem value="diesel_and_natural_gas">Diesel & Natural Gas</MenuItem>
               </TextField>
             </CardContent>
           </Card>
@@ -721,4 +719,3 @@ function App() {
 }
 
 export default App;
-
