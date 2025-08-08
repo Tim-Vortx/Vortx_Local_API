@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime
 
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
@@ -58,6 +59,22 @@ def submit():
     try:
         scenario = request.get_json()
         logging.info(f"Received scenario for submission: {scenario}")
+
+        # Persist the latest scenario to disk for debugging/analysis
+        log_dir = os.path.join(os.path.dirname(__file__), "logs")
+        latest_path = os.path.join(log_dir, "latest_scenario.json")
+        timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        timestamped_path = os.path.join(log_dir, f"scenario_{timestamp}.json")
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+            with open(latest_path, "w") as f:
+                json.dump(scenario, f, indent=2)
+            with open(timestamped_path, "w") as f:
+                json.dump(scenario, f, indent=2)
+        except OSError as e:
+            logging.warning(
+                "Failed to write scenario log files to %s: %s", log_dir, e
+            )
     except BadRequest as e:
         logging.error(f"Malformed JSON in request: {e}")
         return jsonify({"error": "Malformed JSON in request"}), 400
@@ -96,6 +113,14 @@ def submit():
     if not run_uuid:
         logging.error(f"NREL response missing run_uuid: {data}")
         return jsonify({"error": "run_uuid missing from NREL response"}), 502
+
+    # Also store the scenario by run_uuid for historical record keeping
+    try:
+        run_uuid_path = os.path.join(log_dir, f"scenario_{run_uuid}.json")
+        with open(run_uuid_path, "w") as f:
+            json.dump(scenario, f, indent=2)
+    except OSError as e:
+        logging.warning("Failed to write scenario log file %s: %s", run_uuid_path, e)
 
     return jsonify({"run_uuid": run_uuid})
 
