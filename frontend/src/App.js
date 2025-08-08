@@ -10,6 +10,9 @@ import {
   AccordionSummary,
   AccordionDetails,
   Paper,
+  FormControlLabel,
+  Checkbox,
+  MenuItem,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import {
@@ -87,24 +90,24 @@ function extractTimeSeries(outputs) {
 }
 
 function App() {
-  // Generate 8760 hourly load values
-  const hourlyLoads = Array(8760).fill(10);
-
-  // Initialize scenario state as stringified JSON with minimalScenario but replace
-  // loads_kw with full year hourly loads and include a specific year
-  const initialScenario = JSON.stringify(
-    {
-      ...minimalScenario,
-      ElectricLoad: {
-        year: 2017,
-        loads_kw: hourlyLoads,
-      },
-    },
-    null,
-    2
+  const [lat, setLat] = useState(minimalScenario.Site.latitude);
+  const [lon, setLon] = useState(minimalScenario.Site.longitude);
+  const [annualKwh, setAnnualKwh] = useState(minimalScenario.ElectricLoad.annual_kwh);
+  const [doeRefName, setDoeRefName] = useState(minimalScenario.ElectricLoad.doe_reference_name);
+  const [pvMaxKw, setPvMaxKw] = useState(0);
+  const [pvCost, setPvCost] = useState(minimalScenario.PV.installed_cost_per_kw);
+  const [storageMaxKw, setStorageMaxKw] = useState(0);
+  const [storageMaxKwh, setStorageMaxKwh] = useState(0);
+  const [generatorMaxKw, setGeneratorMaxKw] = useState(0);
+  const [generatorFuelCost, setGeneratorFuelCost] = useState(3);
+  const [generatorFuelType, setGeneratorFuelType] = useState("diesel");
+  const [energyRate, setEnergyRate] = useState(
+    minimalScenario.ElectricTariff.blended_annual_energy_rate
   );
-
-  const [scenario, setScenario] = useState(initialScenario);
+  const [demandRate, setDemandRate] = useState(
+    minimalScenario.ElectricTariff.blended_annual_demand_rate
+  );
+  const [offGrid, setOffGrid] = useState(false);
 
   const [runUuid, setRunUuid] = useState(null);
   const [status, setStatus] = useState("");
@@ -126,21 +129,32 @@ function App() {
     setError("");
     setOutputs(null);
     setRunUuid(null);
-    let parsed;
-    try {
-      parsed = JSON.parse(scenario);
-    } catch (e) {
-      setError("Scenario JSON is invalid: " + e.message);
-      return;
-    }
 
-    // Ensure the scenario includes a numeric year for ElectricLoad
-    if (!parsed.ElectricLoad) {
-      parsed.ElectricLoad = {};
-    }
-    if (typeof parsed.ElectricLoad.year !== "number") {
-      parsed.ElectricLoad.year = 2017;
-    }
+    const hourlyLoads = Array(8760).fill(parseFloat(annualKwh) / 8760);
+
+    const scenario = {
+      Site: { latitude: parseFloat(lat), longitude: parseFloat(lon) },
+      ElectricLoad: { year: 2017, loads_kw: hourlyLoads },
+      ElectricTariff: {
+        blended_annual_energy_rate: parseFloat(energyRate),
+        blended_annual_demand_rate: parseFloat(demandRate),
+      },
+      ElectricUtility: minimalScenario.ElectricUtility,
+      PV: {
+        max_kw: parseFloat(pvMaxKw),
+        installed_cost_per_kw: parseFloat(pvCost),
+      },
+      ElectricStorage: {
+        max_kw: parseFloat(storageMaxKw),
+        max_kwh: parseFloat(storageMaxKwh),
+      },
+      Generator: {
+        max_kw: parseFloat(generatorMaxKw),
+        fuel_cost_per_gallon: parseFloat(generatorFuelCost),
+      },
+      Financial: minimalScenario.Financial,
+      Settings: { off_grid_flag: offGrid },
+    };
 
     setStatus("Submitting…");
     try {
@@ -148,9 +162,8 @@ function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // API key is stored on the backend
         },
-        body: JSON.stringify(parsed),
+        body: JSON.stringify(scenario),
       });
       const text = await res.text();
       let data = null;
@@ -170,6 +183,11 @@ function App() {
       }
       console.log("Submit response:", data);
       const { run_uuid } = data;
+      if (!run_uuid) {
+        setError("No run_uuid returned");
+        setStatus("Error");
+        return;
+      }
       setRunUuid(run_uuid);
       setOutputs(null);
       setStatus("Queued: " + run_uuid);
@@ -261,14 +279,111 @@ function App() {
       <Typography variant="h4" gutterBottom>
         REopt MVP
       </Typography>
-      <TextField
-        label="Scenario"
-        multiline
-        minRows={10}
-        fullWidth
-        value={scenario}
-        onChange={(e) => setScenario(e.target.value)}
-      />
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Typography variant="h6">Site</Typography>
+        <TextField
+          label="Latitude"
+          type="number"
+          fullWidth
+          value={lat}
+          onChange={(e) => setLat(e.target.value)}
+        />
+        <TextField
+          label="Longitude"
+          type="number"
+          fullWidth
+          value={lon}
+          onChange={(e) => setLon(e.target.value)}
+        />
+        <Typography variant="h6">Load</Typography>
+        <TextField
+          label="Annual kWh"
+          type="number"
+          fullWidth
+          value={annualKwh}
+          onChange={(e) => setAnnualKwh(e.target.value)}
+        />
+        <TextField
+          label="DOE Reference Name"
+          fullWidth
+          value={doeRefName}
+          onChange={(e) => setDoeRefName(e.target.value)}
+        />
+        <Typography variant="h6">PV</Typography>
+        <TextField
+          label="Max kW"
+          type="number"
+          fullWidth
+          value={pvMaxKw}
+          onChange={(e) => setPvMaxKw(e.target.value)}
+        />
+        <TextField
+          label="Cost per kW ($)"
+          type="number"
+          fullWidth
+          value={pvCost}
+          onChange={(e) => setPvCost(e.target.value)}
+        />
+        <Typography variant="h6">Battery Storage</Typography>
+        <TextField
+          label="Max kW"
+          type="number"
+          fullWidth
+          value={storageMaxKw}
+          onChange={(e) => setStorageMaxKw(e.target.value)}
+        />
+        <TextField
+          label="Max kWh"
+          type="number"
+          fullWidth
+          value={storageMaxKwh}
+          onChange={(e) => setStorageMaxKwh(e.target.value)}
+        />
+        <Typography variant="h6">Generator</Typography>
+        <TextField
+          label="Max kW"
+          type="number"
+          fullWidth
+          value={generatorMaxKw}
+          onChange={(e) => setGeneratorMaxKw(e.target.value)}
+        />
+        <TextField
+          label="Fuel Cost ($/gal)"
+          type="number"
+          fullWidth
+          value={generatorFuelCost}
+          onChange={(e) => setGeneratorFuelCost(e.target.value)}
+        />
+        <TextField
+          select
+          label="Fuel Type"
+          fullWidth
+          value={generatorFuelType}
+          onChange={(e) => setGeneratorFuelType(e.target.value)}
+        >
+          <MenuItem value="diesel">Diesel</MenuItem>
+          <MenuItem value="natural_gas">Natural Gas</MenuItem>
+        </TextField>
+        <Typography variant="h6">Tariff</Typography>
+        <TextField
+          label="Energy Rate ($/kWh)"
+          type="number"
+          fullWidth
+          value={energyRate}
+          onChange={(e) => setEnergyRate(e.target.value)}
+        />
+        <TextField
+          label="Demand Rate ($/kW)"
+          type="number"
+          fullWidth
+          value={demandRate}
+          onChange={(e) => setDemandRate(e.target.value)}
+        />
+        <FormControlLabel
+          control={<Checkbox checked={offGrid} onChange={(e) => setOffGrid(e.target.checked)} />}
+          label="Off Grid"
+        />
+      </Box>
       <Box mt={2} mb={2}>
         <Button variant="contained" onClick={submit}>
           Run REopt
