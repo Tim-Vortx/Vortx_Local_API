@@ -64,6 +64,49 @@ const SERIES_MAP = {
     "Diesel Generator Charges BESS",
 };
 
+// Normalized 8760-hour load shapes for various facility types
+const BASE_SHAPES = {
+  industrial: normalizeShape(
+    Array.from({ length: 8760 }, (_, i) => {
+      const hour = i % 24;
+      const day = Math.floor(i / 24);
+      const seasonal = 0.8 + 0.1 * Math.sin((2 * Math.PI * day) / 365);
+      const diurnal = 0.7 + 0.3 * (hour >= 6 && hour < 18 ? 1 : 0.5);
+      return seasonal * diurnal;
+    }),
+  ),
+  manufacturing: normalizeShape(
+    Array.from({ length: 8760 }, (_, i) => {
+      const hour = i % 24;
+      const day = Math.floor(i / 24);
+      const weekday = day % 7 < 5;
+      const seasonal = 0.7 + 0.2 * Math.sin((2 * Math.PI * day) / 365);
+      const base = weekday
+        ? hour >= 7 && hour < 19
+          ? 1
+          : 0.3
+        : hour >= 8 && hour < 16
+        ? 0.5
+        : 0.2;
+      return seasonal * base;
+    }),
+  ),
+  cold_storage: normalizeShape(
+    Array.from({ length: 8760 }, (_, i) => {
+      const hour = i % 24;
+      const day = Math.floor(i / 24);
+      const seasonal = 0.9 + 0.1 * Math.sin((2 * Math.PI * day) / 365);
+      const diurnal = 0.85 + 0.15 * Math.cos((2 * Math.PI * hour) / 24);
+      return seasonal * diurnal;
+    }),
+  ),
+};
+
+function normalizeShape(arr) {
+  const max = Math.max(...arr);
+  return arr.map((v) => v / max);
+}
+
 function ArrayRenderer({ arr }) {
   const [expanded, setExpanded] = useState(false);
   const allPrimitive = arr.every(
@@ -315,22 +358,26 @@ function App() {
     const peak = parseFloat(peakLoad);
     const lf = parseFloat(genLoadFactor);
     if (!peak || !lf) return;
-    const shape = Array.from({ length: 8760 }, (_, i) => {
-      const hour = i % 24;
-      const weekday = Math.floor(i / 24) % 7 < 5;
-      switch (siteType) {
-        case "manufacturing":
-          return weekday && hour >= 8 && hour < 18 ? 1 : 0.3;
-        case "cold_storage":
-          return 0.7;
-        case "industrial":
-        default:
-          return 0.8;
-      }
-    });
-    const avgShape = shape.reduce((a, b) => a + b, 0) / 8760;
-    const scale = lf / avgShape;
-    const arr = shape.map((v) => v * scale * peak);
+    const baseShape = BASE_SHAPES[siteType] || BASE_SHAPES.industrial;
+    const avgNorm = baseShape.reduce((a, b) => a + b, 0) / 8760;
+    const targetAverage = lf * peak;
+    const a = (targetAverage - peak) / (avgNorm - 1);
+    const b = peak - a;
+    const arr = baseShape.map((v) => a * v + b);
+    const peakCheck = Math.max(...arr);
+    const avgCheck = arr.reduce((a, b) => a + b, 0) / 8760;
+    console.assert(
+      Math.abs(peakCheck - peak) < 1e-6,
+      `Peak ${peakCheck} != ${peak}`,
+    );
+    console.assert(
+      Math.abs(avgCheck - targetAverage) < 1e-6,
+      `Average ${avgCheck} != ${targetAverage}`,
+    );
+    console.assert(
+      arr.some((v) => v !== arr[0]),
+      "Generated load profile is flat",
+    );
     setLoadYear(new Date().getFullYear());
     setLoads(arr);
   };
