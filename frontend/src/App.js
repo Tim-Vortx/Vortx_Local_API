@@ -168,9 +168,12 @@ function App() {
       },
       Generator: {
         max_kw: parseFloat(generatorMaxKw),
-        ...(generatorFuelType === "natural_gas"
+        ...(generatorFuelType !== "natural_gas"
+          ? { fuel_cost_per_gallon: parseFloat(generatorFuelCostPerGallon) }
+          : {}),
+        ...(generatorFuelType !== "diesel"
           ? { fuel_cost_per_mmbtu: parseFloat(generatorFuelCostPerMmbtu) }
-          : { fuel_cost_per_gallon: parseFloat(generatorFuelCostPerGallon) }),
+          : {}),
         fuel_type: generatorFuelType,
       },
       Financial: minimalScenario.Financial,
@@ -365,43 +368,55 @@ function App() {
           control={<Checkbox checked={useDiesel} onChange={(e) => setUseDiesel(e.target.checked)} />}
           label="Diesel"
         />
-        <TextField
-          label={
-            generatorFuelType === "natural_gas"
-              ? "Fuel Cost ($/MMBtu)"
-              : "Fuel Cost ($/gal)"
-          }
-          type="number"
-          fullWidth
-          value={
-            generatorFuelType === "natural_gas"
-              ? generatorFuelCostPerMmbtu
-              : generatorFuelCostPerGallon
-          }
-          onChange={(e) =>
-            generatorFuelType === "natural_gas"
-              ? setGeneratorFuelCostPerMmbtu(e.target.value)
-              : setGeneratorFuelCostPerGallon(e.target.value)
-          }
-        />
-        {useNatGas && (
+        {generatorFuelType === "diesel" && (
+          <TextField
+            label="Fuel Cost ($/gal)"
+            type="number"
+            fullWidth
+            value={generatorFuelCostPerGallon}
+            onChange={(e) => setGeneratorFuelCostPerGallon(e.target.value)}
+          />
+        )}
+        {generatorFuelType === "natural_gas" && (
+          <TextField
+            label="Fuel Cost ($/MMBtu)"
+            type="number"
+            fullWidth
+            value={generatorFuelCostPerMmbtu}
+            onChange={(e) => setGeneratorFuelCostPerMmbtu(e.target.value)}
+          />
+        )}
+        {generatorFuelType === "diesel_and_natural_gas" && (
           <>
             <TextField
-              label="Natural Gas Max kW"
+              label="Diesel Fuel Cost ($/gal)"
               type="number"
               fullWidth
-              value={natGasMaxKw}
-              onChange={(e) => setNatGasMaxKw(e.target.value)}
+              value={generatorFuelCostPerGallon}
+              onChange={(e) => setGeneratorFuelCostPerGallon(e.target.value)}
+              sx={{ mb: 2 }}
             />
             <TextField
-              label="Natural Gas Fuel Cost ($/gal)"
+              label="Natural Gas Fuel Cost ($/MMBtu)"
               type="number"
               fullWidth
-              value={natGasFuelCost}
-              onChange={(e) => setNatGasFuelCost(e.target.value)}
+              value={generatorFuelCostPerMmbtu}
+              onChange={(e) => setGeneratorFuelCostPerMmbtu(e.target.value)}
             />
           </>
         )}
+        <TextField
+          select
+          label="Fuel Type"
+          fullWidth
+          value={generatorFuelType}
+          onChange={(e) => setGeneratorFuelType(e.target.value)}
+        >
+          <MenuItem value="diesel">Diesel</MenuItem>
+          <MenuItem value="natural_gas">Natural Gas</MenuItem>
+          <MenuItem value="diesel_and_natural_gas">Diesel & Natural Gas</MenuItem>
+        </TextField>
+
         <Typography variant="h6">Tariff</Typography>
         <TextField
           label="Energy Rate ($/kWh)"
