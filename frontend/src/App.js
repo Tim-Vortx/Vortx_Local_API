@@ -97,12 +97,12 @@ function App() {
   const [pvCost, setPvCost] = useState(minimalScenario.PV.installed_cost_per_kw);
   const [storageMaxKw, setStorageMaxKw] = useState(0);
   const [storageMaxKwh, setStorageMaxKwh] = useState(0);
-  const [useDiesel, setUseDiesel] = useState(false);
-  const [dieselMaxKw, setDieselMaxKw] = useState(0);
-  const [dieselFuelCost, setDieselFuelCost] = useState(3);
-  const [useNatGas, setUseNatGas] = useState(false);
-  const [natGasMaxKw, setNatGasMaxKw] = useState(0);
-  const [natGasFuelCost, setNatGasFuelCost] = useState(3);
+
+  const [generatorMaxKw, setGeneratorMaxKw] = useState(0);
+  const [generatorFuelCostPerGallon, setGeneratorFuelCostPerGallon] = useState(3);
+  const [generatorFuelCostPerMmbtu, setGeneratorFuelCostPerMmbtu] = useState(6);
+  const [generatorFuelType, setGeneratorFuelType] = useState("diesel");
+
   const [energyRate, setEnergyRate] = useState(
     minimalScenario.ElectricTariff.blended_annual_energy_rate
   );
@@ -166,7 +166,13 @@ function App() {
         max_kw: parseFloat(storageMaxKw),
         max_kwh: parseFloat(storageMaxKwh),
       },
-      ...generators,
+      Generator: {
+        max_kw: parseFloat(generatorMaxKw),
+        ...(generatorFuelType === "natural_gas"
+          ? { fuel_cost_per_mmbtu: parseFloat(generatorFuelCostPerMmbtu) }
+          : { fuel_cost_per_gallon: parseFloat(generatorFuelCostPerGallon) }),
+        fuel_type: generatorFuelType,
+      },
       Financial: minimalScenario.Financial,
       Settings: { off_grid_flag: offGrid },
     };
@@ -359,27 +365,24 @@ function App() {
           control={<Checkbox checked={useDiesel} onChange={(e) => setUseDiesel(e.target.checked)} />}
           label="Diesel"
         />
-        {useDiesel && (
-          <>
-            <TextField
-              label="Diesel Max kW"
-              type="number"
-              fullWidth
-              value={dieselMaxKw}
-              onChange={(e) => setDieselMaxKw(e.target.value)}
-            />
-            <TextField
-              label="Diesel Fuel Cost ($/gal)"
-              type="number"
-              fullWidth
-              value={dieselFuelCost}
-              onChange={(e) => setDieselFuelCost(e.target.value)}
-            />
-          </>
-        )}
-        <FormControlLabel
-          control={<Checkbox checked={useNatGas} onChange={(e) => setUseNatGas(e.target.checked)} />}
-          label="Natural Gas"
+        <TextField
+          label={
+            generatorFuelType === "natural_gas"
+              ? "Fuel Cost ($/MMBtu)"
+              : "Fuel Cost ($/gal)"
+          }
+          type="number"
+          fullWidth
+          value={
+            generatorFuelType === "natural_gas"
+              ? generatorFuelCostPerMmbtu
+              : generatorFuelCostPerGallon
+          }
+          onChange={(e) =>
+            generatorFuelType === "natural_gas"
+              ? setGeneratorFuelCostPerMmbtu(e.target.value)
+              : setGeneratorFuelCostPerGallon(e.target.value)
+          }
         />
         {useNatGas && (
           <>

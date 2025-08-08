@@ -95,6 +95,7 @@ def submit():
             "Content-Type": "application/json",
             "X-Api-Key":    NREL_API_KEY,
         }
+        # Forward scenario without altering fuel-cost fields or units
         resp = requests.post(post_url, json=scenario, headers=headers)
         resp.raise_for_status()
         data = resp.json()
