@@ -949,44 +949,12 @@ function App() {
               })}
             </Typography>
           )}
-          {outputs && (
-            <Box mt={4}>
-              <Typography variant="h5" gutterBottom>
-                Outputs
-              </Typography>
-              <Box mb={4}>
-                <Typography variant="h6">Daily Operations</Typography>
-                <LocalizationProvider dateAdapter={AdapterDateFns}>
-                  <DatePicker
-                    label="Date"
-                    views={["month", "day"]}
-                    format="MM/dd"
-                    value={selectedDate}
-                    onChange={(newValue) => {
-                      if (newValue) {
-                        setSelectedDate(newValue);
-                        const diff = Math.floor(
-                          (newValue - startDate) / (24 * 60 * 60 * 1000),
-                        );
-                        setDayIndex(Math.min(364, Math.max(0, diff)));
-                      }
-                    }}
-                    slotProps={{ textField: { sx: { mb: 2 } } }}
-                  />
-                </LocalizationProvider>
-                <PowerChart data={dailyData} />
-              </Box>
-                <Paper variant="outlined" sx={{ p: 2 }}>
-                  <RenderOutputs data={outputs} />
-                </Paper>
-              </Box>
-            )}
-            {payback_years !== undefined && (
-              <Typography>Payback Period: {payback_years} years</Typography>
-            )}
-            {lcc !== undefined && (
-              <Typography>
-                Life Cycle Cost: $
+          {payback_years !== undefined && (
+            <Typography>Payback Period: {payback_years} years</Typography>
+          )}
+          {lcc !== undefined && (
+            <Typography>
+              Life Cycle Cost: $
               {lcc.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </Typography>
           )}
@@ -1006,20 +974,33 @@ function App() {
       {outputs && (
         <Box mt={4}>
           <Typography variant="h5" gutterBottom>
-            Daily Operations
+            Outputs
           </Typography>
-          <TextField
-            type="number"
-            label="Day (0-364)"
-            value={dayIndex}
-            onChange={(e) =>
-              setDayIndex(
-                Math.min(364, Math.max(0, parseInt(e.target.value || "0", 10))),
-              )
-            }
-            sx={{ mb: 2 }}
-          />
-          <PowerChart data={dailyData} />
+          <Box mb={4}>
+            <Typography variant="h6">Daily Operations</Typography>
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <DatePicker
+                label="Date"
+                views={["month", "day"]}
+                format="MM/dd"
+                value={selectedDate}
+                onChange={(newValue) => {
+                  if (newValue) {
+                    setSelectedDate(newValue);
+                    const diff = Math.floor(
+                      (newValue - startDate) / (24 * 60 * 60 * 1000),
+                    );
+                    setDayIndex(Math.min(364, Math.max(0, diff)));
+                  }
+                }}
+                slotProps={{ textField: { sx: { mb: 2 } } }}
+              />
+            </LocalizationProvider>
+            <PowerChart data={dailyData} />
+          </Box>
+          <Paper variant="outlined" sx={{ p: 2 }}>
+            <RenderOutputs data={outputs} />
+          </Paper>
         </Box>
       )}
     </Box>
