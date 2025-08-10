@@ -16,28 +16,17 @@ import {
   Tooltip,
   ReferenceLine,
   ResponsiveContainer,
-  Brush,
+  // Brush removed (date slider not needed for single-day view)
 } from 'recharts';
 
-// generate hourly data from Aug 5 to Aug 8, 2025
-const start = new Date('2025-08-05T00:00:00').getTime();
-const hours = 24 * 4;
-const defaultData = Array.from({ length: hours }, (_, i) => {
-  const t = new Date(start + i * 3600 * 1000);
-  const h = t.getHours();
+// Single-day synthetic default (used only when no real data yet)
+const defaultStart = new Date('2025-08-05T00:00:00').getTime();
+const defaultData = Array.from({ length: 24 }, (_, h) => {
+  const t = new Date(defaultStart + h * 3600 * 1000).getTime();
   const load = 600 + 600 * Math.max(0, Math.sin(((h - 6) / 24) * Math.PI * 2));
-  const solar = h >= 6 && h <= 18 ? -800 * Math.sin(((h - 6) / 12) * Math.PI) : 0;
-  const bess =
-    h >= 0 && h <= 5 ? 200 : h >= 12 && h <= 15 ? -200 : 0;
-  const utility = load + bess + solar;
-  return { timestamp: t.getTime(), load, solar, bess, utility };
+  const solar = h >= 6 && h <= 18 ? 800 * Math.sin(((h - 6) / 12) * Math.PI) : 0; // positive generation in daylight
+  return { timestamp: t, hour: h, load, solar_to_load: solar * 0.8, utility_to_load: load - solar * 0.8 };
 });
-
-const defaultEvents = [
-  { date: new Date('2025-08-06T12:00:00').getTime(), color: '#EF5350', count: 1 },
-  { date: new Date('2025-08-07T12:00:00').getTime(), color: '#FFCC80', count: 1 },
-  { date: new Date('2025-08-08T12:00:00').getTime(), color: '#FFCC80', count: 1 },
-];
 
 // Define the data keys used for stacked supply and overlay areas. Each key maps to
 // a stroke and fill color so the chart can dynamically render whichever series are
@@ -74,25 +63,14 @@ export default function PowerChart({ data = defaultData }) {
     diesel_export: true,
     ng_export: true,
   });
-  const [range, setRange] = useState({
-    startIndex: 0,
-    endIndex: data.length - 1,
-  });
-
-
+  // Removed zoom + range logic since we now display a single day at a time
   const handleLegend = (key) => (e) => {
     setShow({ ...show, [key]: e.target.checked });
   };
-
-  const resetZoom = () => {
-
-    setRange({ startIndex: 0, endIndex: data.length - 1 });
-  };
-
-  const filtered = data.slice(range.startIndex, range.endIndex + 1);
+  const filtered = data; // one-day slice already
+  const hasHour = filtered.length && filtered[0].hour !== undefined;
   const startTime = filtered[0]?.timestamp || 0;
   const endTime = filtered[filtered.length - 1]?.timestamp || 0;
-  const events = data === defaultData ? defaultEvents : [];
 
 
   return (
@@ -101,21 +79,34 @@ export default function PowerChart({ data = defaultData }) {
       <Box display="flex" height={300}>
         <Box flexGrow={1}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={filtered} margin={{ top: 10, right: 20, bottom: 30, left: 20 }}>
+            <AreaChart data={filtered} margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
               <CartesianGrid stroke="#eee" verticalLines={true} />
-              <XAxis
-                dataKey="timestamp"
-                type="number"
-                domain={[startTime, endTime]}
-                tickFormatter={(t) => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              />
+              {hasHour ? (
+                <XAxis
+                  dataKey="hour"
+                  type="number"
+                  domain={[0, 24]}
+                  ticks={[0,3,6,9,12,15,18,21,24]}
+                  tickFormatter={(h) => `${h}`}
+                  label={{ value: 'Hour of Day', position: 'insideBottom', offset: -5 }}
+                />
+              ) : (
+                <XAxis
+                  dataKey="timestamp"
+                  type="number"
+                  domain={[startTime, endTime]}
+                  tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                />
+              )}
               <YAxis
                 label={{ value: 'kW', angle: -90, position: 'insideLeft' }}
                 domain={['auto', 'auto']}
               />
               <Tooltip
-                formatter={(value, name) => [`${value.toFixed(0)} kW`, name]}
-                labelFormatter={(t) => new Date(t).toLocaleString()}
+                formatter={(value, name) => [`${Number(value).toFixed(0)} kW`, name]}
+                labelFormatter={(v) =>
+                  hasHour ? `Hour ${v}` : new Date(v).toLocaleString()
+                }
               />
               <ReferenceLine y={0} stroke="#888" strokeDasharray="2 2" />
               {supplyKeys.map(({ key, stroke, fill }) =>
@@ -153,56 +144,8 @@ export default function PowerChart({ data = defaultData }) {
                   dot={false}
                 />
               )}
-              <Brush
-                dataKey="timestamp"
-                height={20}
-                stroke="#8884d8"
-                startIndex={range.startIndex}
-                endIndex={range.endIndex}
-                onChange={(e) => {
-                  if (e && e.startIndex !== undefined) {
-                    setRange({ startIndex: e.startIndex, endIndex: e.endIndex });
-                  }
-                }}
-              />
             </AreaChart>
           </ResponsiveContainer>
-          <Box position="relative" mt={1} height={20} sx={{ backgroundColor: '#eee' }}>
-            {events.map((ev, idx) => {
-              const pos =
-                ((ev.date - startTime) / (endTime - startTime)) * 100;
-              return (
-                <Box key={idx} position="absolute" left={`calc(${pos}% - 10px)`} top={2}>
-                  <Box
-                    sx={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: '50%',
-                      backgroundColor: ev.color,
-                      color: '#000',
-                      fontSize: 10,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {ev.count}
-                  </Box>
-                </Box>
-              );
-            })}
-          </Box>
-          {range.startIndex !== 0 || range.endIndex !== data.length - 1 ? (
-            <Box textAlign="right">
-              <Typography
-                variant="button"
-                onClick={resetZoom}
-                sx={{ mt: 1, cursor: 'pointer' }}
-              >
-                Cancel Zoom
-              </Typography>
-            </Box>
-          ) : null}
         </Box>
         <Box width={160} ml={2}>
           <FormGroup>
