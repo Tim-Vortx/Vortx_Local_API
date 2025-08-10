@@ -610,8 +610,11 @@ function App() {
   }, [results, dayIndex, tph]);
 
   useEffect(() => {
-    if (tab !== 3) setDayIndex("0");
-  }, [tab]);
+    if (tab !== 3) {
+      setDayIndex("0");
+      setSelectedDate(startDate);
+    }
+  }, [tab, startDate]);
 
   const utilityLoadPanel = (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -1000,30 +1003,6 @@ function App() {
             <Typography variant="h5" gutterBottom>
               Outputs
             </Typography>
-            <Box mb={4}>
-              <Typography variant="h6">Daily Operations</Typography>
-              <LocalizationProvider dateAdapter={AdapterDateFns}>
-                <DatePicker
-                  label="Date"
-                  views={["month", "day"]}
-                  format="MM/dd"
-                  value={selectedDate}
-                  onChange={(newValue) => {
-                    if (newValue) {
-                      setSelectedDate(newValue);
-                      const diff = Math.floor(
-                        (newValue - startDate) / (24 * 60 * 60 * 1000),
-                      );
-                      setDayIndex(
-                        String(Math.min(364, Math.max(0, diff))),
-                      );
-                    }
-                  }}
-                  slotProps={{ textField: { sx: { mb: 2 } } }}
-                />
-              </LocalizationProvider>
-              <PowerChart data={dailyData} />
-            </Box>
             <Paper variant="outlined" sx={{ p: 2 }}>
               <RenderOutputs data={outputs} />
             </Paper>
@@ -1055,20 +1034,26 @@ function App() {
           <Typography variant="h5" gutterBottom>
             Outputs
           </Typography>
-          <TextField
-            type="number"
-            label="Day (0-364)"
-            value={dayIndex}
-            onChange={(e) => setDayIndex(e.target.value)}
-            onBlur={() =>
-              setDayIndex(
-                String(
-                  Math.min(364, Math.max(0, parseInt(dayIndex || "0", 10))),
-                ),
-              )
-            }
-            sx={{ mb: 2 }}
-          />
+          <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <DatePicker
+              label="Date"
+              views={["month", "day"]}
+              format="MM/dd"
+              value={selectedDate}
+              onChange={(newValue) => {
+                if (newValue) {
+                  setSelectedDate(newValue);
+                  const diff = Math.floor(
+                    (newValue - startDate) / (24 * 60 * 60 * 1000),
+                  );
+                  setDayIndex(
+                    String(Math.min(364, Math.max(0, diff))),
+                  );
+                }
+              }}
+              slotProps={{ textField: { sx: { mb: 2 } } }}
+            />
+          </LocalizationProvider>
           <PowerChart data={dailyData} />
         </Box>
       )}
