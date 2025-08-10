@@ -613,7 +613,7 @@ function App() {
     if (tab !== 3) setDayIndex("0");
   }, [tab]);
 
-  const UtilityLoadPanel = () => (
+  const utilityLoadPanel = (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <Card>
         <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -727,7 +727,7 @@ function App() {
     </Box>
   );
 
-  const MicrogridDesignPanel = () => (
+  const microgridDesignPanel = (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <Card>
         <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -981,71 +981,68 @@ function App() {
     </Box>
   );
 
-  const FinancialOutputsPanel = () => {
-    if (!outputs)
-      return <Typography>No financial results available.</Typography>;
-    const { npv_us_dollars, payback_years, lcc } = outputs;
-    return (
-      <Card>
-        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <Typography variant="h6">Financial Outputs</Typography>
-          {npv_us_dollars !== undefined && (
-            <Typography>
-              Net Present Value: $
-              {npv_us_dollars.toLocaleString(undefined, {
-                maximumFractionDigits: 2,
-              })}
+  const financialOutputsPanel = !outputs ? (
+    <Typography>No financial results available.</Typography>
+  ) : (
+    <Card>
+      <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Typography variant="h6">Financial Outputs</Typography>
+        {outputs.npv_us_dollars !== undefined && (
+          <Typography>
+            Net Present Value: $
+            {outputs.npv_us_dollars.toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}
+          </Typography>
+        )}
+        {outputs && (
+          <Box mt={4}>
+            <Typography variant="h5" gutterBottom>
+              Outputs
             </Typography>
-          )}
-          {outputs && (
-            <Box mt={4}>
-              <Typography variant="h5" gutterBottom>
-                Outputs
-              </Typography>
-              <Box mb={4}>
-                <Typography variant="h6">Daily Operations</Typography>
-                <LocalizationProvider dateAdapter={AdapterDateFns}>
-                  <DatePicker
-                    label="Date"
-                    views={["month", "day"]}
-                    format="MM/dd"
-                    value={selectedDate}
-                    onChange={(newValue) => {
-                      if (newValue) {
-                        setSelectedDate(newValue);
-                        const diff = Math.floor(
-                          (newValue - startDate) / (24 * 60 * 60 * 1000),
-                        );
-                        setDayIndex(
-                          String(Math.min(364, Math.max(0, diff))),
-                        );
-                      }
-                    }}
-                    slotProps={{ textField: { sx: { mb: 2 } } }}
-                  />
-                </LocalizationProvider>
-                <PowerChart data={dailyData} />
-              </Box>
-                <Paper variant="outlined" sx={{ p: 2 }}>
-                  <RenderOutputs data={outputs} />
-                </Paper>
-              </Box>
-            )}
-            {payback_years !== undefined && (
-              <Typography>Payback Period: {payback_years} years</Typography>
-            )}
-            {lcc !== undefined && (
-              <Typography>
-                Life Cycle Cost: $
-              {lcc.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            </Typography>
-          )}
-        </CardContent>
-      </Card>
-    );
-  };
+            <Box mb={4}>
+              <Typography variant="h6">Daily Operations</Typography>
+              <LocalizationProvider dateAdapter={AdapterDateFns}>
+                <DatePicker
+                  label="Date"
+                  views={["month", "day"]}
+                  format="MM/dd"
+                  value={selectedDate}
+                  onChange={(newValue) => {
+                    if (newValue) {
+                      setSelectedDate(newValue);
+                      const diff = Math.floor(
+                        (newValue - startDate) / (24 * 60 * 60 * 1000),
+                      );
+                      setDayIndex(
+                        String(Math.min(364, Math.max(0, diff))),
+                      );
+                    }
+                  }}
+                  slotProps={{ textField: { sx: { mb: 2 } } }}
+                />
+              </LocalizationProvider>
+              <PowerChart data={dailyData} />
+            </Box>
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <RenderOutputs data={outputs} />
+            </Paper>
+          </Box>
+        )}
+        {outputs.payback_years !== undefined && (
+          <Typography>Payback Period: {outputs.payback_years} years</Typography>
+        )}
+        {outputs.lcc !== undefined && (
+          <Typography>
+            Life Cycle Cost: $
+            {outputs.lcc.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </Typography>
+        )}
+      </CardContent>
+    </Card>
+  );
 
-  const PerformancePanel = () => (
+  const performancePanel = (
     <Box>
       <Typography>Status: {status}</Typography>
       {error && (
@@ -1066,10 +1063,7 @@ function App() {
             onBlur={() =>
               setDayIndex(
                 String(
-                  Math.min(
-                    364,
-                    Math.max(0, parseInt(dayIndex || "0", 10)),
-                  ),
+                  Math.min(364, Math.max(0, parseInt(dayIndex || "0", 10))),
                 ),
               )
             }
@@ -1092,10 +1086,10 @@ function App() {
         <Tab label="Financial Outputs" />
         <Tab label="Performance Data & Visualizations" />
       </Tabs>
-      {tab === 0 && <UtilityLoadPanel />}
-      {tab === 1 && <MicrogridDesignPanel />}
-      {tab === 2 && <FinancialOutputsPanel />}
-      {tab === 3 && <PerformancePanel />}
+      {tab === 0 && utilityLoadPanel}
+      {tab === 1 && microgridDesignPanel}
+      {tab === 2 && financialOutputsPanel}
+      {tab === 3 && performancePanel}
     </Container>
   );
 }
