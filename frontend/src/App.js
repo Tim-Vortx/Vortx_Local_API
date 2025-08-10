@@ -23,6 +23,7 @@ import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PowerChart from "./PowerChart";
+import LocationInput from "./LocationInput";
 
 // Normalized 8760-hour load shapes for various facility types
 const BASE_SHAPES = {
@@ -617,16 +618,14 @@ function App() {
       <Card>
         <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <Typography variant="h6">Site</Typography>
-          <TextField
-            label="Address or Zip Code"
-            fullWidth
+          <LocationInput
             value={location}
-            onChange={(e) => {
-              setLocation(e.target.value);
+            onValueCommit={(val) => {
+              setLocation(val);
               setUrdbLabel("");
               setTariffs([]);
             }}
-            onBlur={fetchTariffs}
+            onFindTariffs={(val) => fetchTariffs(val)}
           />
           {tariffs.length > 0 && (
             <TextField
