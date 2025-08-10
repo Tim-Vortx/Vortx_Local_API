@@ -24,7 +24,7 @@ logging.basicConfig(
 # Track temporary cooldowns for run_uuids after hitting rate limits
 cooldowns = {}
 
-API_URL = "https://developer.nrel.gov/api/reopt/v3/"
+API_URL = "https://developer.nrel.gov/api/reopt/stable/"
 NREL_API_KEY = os.getenv("NREL_API_KEY")
 
 def _extract_support_id(body: str) -> str | None:
@@ -66,24 +66,85 @@ def submit():
         logging.info(f"Received scenario for submission: {scenario}")
 
         # Basic input validation before logging and forwarding
-        # Validate top-level blocks
         site = scenario.get("Site")
         el_load = scenario.get("ElectricLoad", {})
+        settings = scenario.get("Settings", {})
         loads_kw = el_load.get("loads_kw") if isinstance(el_load, dict) else None
-        # Sanitize DOE reference name if provided by frontend but invalid for NREL
-        if isinstance(el_load, dict) and "doe_reference_name" in el_load:
-            removed = el_load.pop("doe_reference_name", None)
-            logging.info(f"Removed ElectricLoad.doe_reference_name (was '{removed}') to satisfy NREL API constraints")
 
         if not site or not isinstance(site, dict) or \
            "latitude" not in site or "longitude" not in site:
             logging.error("Invalid or missing Site information: %s", site)
             return jsonify({"error": "Invalid or missing Site information"}), 400
 
-        if not isinstance(loads_kw, list) or len(loads_kw) != 8760:
-            logging.error("Invalid ElectricLoad.loads_kw: expected 8760 hourly values, got %s", 
-                          type(loads_kw).__name__ if loads_kw is not None else loads_kw)
-            return jsonify({"error": "ElectricLoad.loads_kw must contain exactly 8760 hourly values"}), 400
+        if isinstance(loads_kw, list):
+            tsp = settings.get("time_steps_per_hour", 1) or 1
+            expected = 8760 * tsp
+            if len(loads_kw) != expected:
+                logging.error(
+                    "Invalid ElectricLoad.loads_kw: expected %s values, got %s",
+                    expected,
+                    len(loads_kw),
+                )
+                return (
+                    jsonify(
+                        {
+                            "error": (
+                                "ElectricLoad.loads_kw must contain exactly "
+                                f"{expected} values"
+                            )
+                        }
+                    ),
+                    400,
+                )
+
+            # Ensure year is provided for custom loads
+            el_load.setdefault("year", settings.get("analysis_year", datetime.utcnow().year))
+            if "doe_reference_name" in el_load:
+                removed = el_load.pop("doe_reference_name")
+                logging.info(
+                    f"Removed ElectricLoad.doe_reference_name (was '{removed}') because custom loads were supplied"
+                )
+
+        et = scenario.get("ElectricTariff", {})
+        if not isinstance(et, dict):
+            return jsonify({"error": "ElectricTariff block required"}), 400
+        has_urdb = "urdb_label" in et
+        has_blended = any(k.startswith("blended") for k in et.keys())
+        has_tou = any(k.startswith("tou") for k in et.keys())
+        if sum([has_urdb, has_blended, has_tou]) != 1:
+            logging.error(
+                "ElectricTariff must include exactly one of urdb_label, blended rates, or TOU definitions"
+            )
+            return (
+                jsonify(
+                    {
+                        "error": "ElectricTariff must include exactly one of urdb_label, blended rates, or TOU definitions"
+                    }
+                ),
+                400,
+            )
+
+        # Translate natural gas generators to CHP objects
+        for key in list(scenario.keys()):
+            if not key.lower().startswith("generator"):
+                continue
+            gen = scenario[key]
+            if not isinstance(gen, dict):
+                continue
+            fuel = gen.get("fuel_type", "").lower()
+            if fuel in {"natural_gas", "natural gas", "ng"}:
+                chp = gen.copy()
+                if "fuel_cost_per_mmbtu" not in chp and "fuel_cost_per_gal" in chp:
+                    chp["fuel_cost_per_mmbtu"] = chp.pop("fuel_cost_per_gal")
+                scenario["CHP"] = chp
+                scenario.pop(key)
+
+        financial = scenario.setdefault("Financial", {})
+        financial.setdefault("analysis_years", 25)
+        financial.setdefault("escalation_pct", 0)
+        financial.setdefault("om_cost_escalation_pct", 0)
+        financial.setdefault("offtaker_discount_pct", 0)
+        financial.setdefault("offtaker_tax_pct", 0)
 
         # Persist the latest scenario to disk for debugging/analysis
         log_dir = os.path.join(os.path.dirname(__file__), "logs")
@@ -179,6 +240,22 @@ def urdb():
     items = data.get("items", [])
     tariffs = [{"label": i.get("label"), "name": i.get("name")} for i in items]
     return jsonify(tariffs)
+
+
+@app.route("/schema", methods=["GET"])
+def schema():
+    """Proxy the REopt input schema from NREL."""
+    if not NREL_API_KEY:
+        logging.error("NREL_API_KEY is not configured")
+        return jsonify({"error": "Server missing NREL API key"}), 500
+    url = "https://developer.nrel.gov/api/reopt/v3/job/inputs"
+    try:
+        resp = requests.get(url, params={"api_key": NREL_API_KEY}, timeout=DEFAULT_TIMEOUT)
+        resp.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to fetch schema from NREL: {e}")
+        return jsonify({"error": "Failed to fetch schema"}), 502
+    return jsonify(resp.json())
 
 
 @app.route("/status/<run_uuid>", methods=["GET"])
