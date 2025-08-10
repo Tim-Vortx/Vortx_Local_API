@@ -111,8 +111,7 @@ export default function PowerChart({ data = defaultData }) {
               />
               <YAxis
                 label={{ value: 'kW', angle: -90, position: 'insideLeft' }}
-                domain={[-600, 1200]}
-                ticks={[-600, 0, 600, 1200]}
+                domain={['auto', 'auto']}
               />
               <Tooltip
                 formatter={(value, name) => [`${value.toFixed(0)} kW`, name]}
