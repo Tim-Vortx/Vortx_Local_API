@@ -976,16 +976,17 @@ function App() {
                 </LocalizationProvider>
                 <PowerChart data={dailyData} />
               </Box>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <RenderOutputs data={outputs} />
-              </Paper>
-            </Box>
-          {payback_years !== undefined && (
-            <Typography>Payback Period: {payback_years} years</Typography>
-          )}
-          {lcc !== undefined && (
-            <Typography>
-              Life Cycle Cost: $
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <RenderOutputs data={outputs} />
+                </Paper>
+              </Box>
+            )}
+            {payback_years !== undefined && (
+              <Typography>Payback Period: {payback_years} years</Typography>
+            )}
+            {lcc !== undefined && (
+              <Typography>
+                Life Cycle Cost: $
               {lcc.toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </Typography>
           )}
