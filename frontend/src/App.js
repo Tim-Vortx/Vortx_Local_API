@@ -18,6 +18,10 @@ import {
   CardContent,
   Tabs,
   Tab,
+  FormControl,
+  FormLabel,
+  RadioGroup,
+  Radio,
 } from "@mui/material";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
@@ -205,6 +209,7 @@ function validateTariff(tariff, schema) {
 
 function App() {
   const [location, setLocation] = useState("");
+  const [sizingMode, setSizingMode] = useState("optimal");
   const [pvMaxKw, setPvMaxKw] = useState("0");
   const [pvCost, setPvCost] = useState(
     String(minimalScenario.PV.installed_cost_per_kw),
@@ -439,7 +444,12 @@ function App() {
 
     if (usePv) {
       scenario.PV = {
-        max_kw: parseFloat(pvMaxKw),
+        ...(sizingMode === "optimal"
+          ? { max_kw: parseFloat(pvMaxKw) }
+          : {
+              existing_kw: parseFloat(pvMaxKw),
+              max_kw: parseFloat(pvMaxKw),
+            }),
         installed_cost_per_kw: parseFloat(pvCost),
         can_export: solarCanExport,
       };
@@ -447,8 +457,17 @@ function App() {
 
     if (useStorage) {
       scenario.ElectricStorage = {
-        max_kw: parseFloat(storageMaxKw),
-        max_kwh: parseFloat(storageMaxKwh),
+        ...(sizingMode === "optimal"
+          ? {
+              max_kw: parseFloat(storageMaxKw),
+              max_kwh: parseFloat(storageMaxKwh),
+            }
+          : {
+              existing_kw: parseFloat(storageMaxKw),
+              existing_kwh: parseFloat(storageMaxKwh),
+              max_kw: parseFloat(storageMaxKw),
+              max_kwh: parseFloat(storageMaxKwh),
+            }),
         can_export: bessCanExport,
         charge_from_pv_only: bessSolarOnly,
       };
@@ -456,7 +475,12 @@ function App() {
 
     if (useGenerator) {
       scenario.Generator = {
-        max_kw: parseFloat(generatorMaxKw),
+        ...(sizingMode === "optimal"
+          ? { max_kw: parseFloat(generatorMaxKw) }
+          : {
+              existing_kw: parseFloat(generatorMaxKw),
+              max_kw: parseFloat(generatorMaxKw),
+            }),
         ...(generatorFuelType !== "natural_gas"
           ? { fuel_cost_per_gallon: parseFloat(generatorFuelCostPerGallon) }
           : {}),
@@ -732,6 +756,25 @@ function App() {
 
   const microgridDesignPanel = (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <FormControl component="fieldset">
+        <FormLabel component="legend">Sizing Mode</FormLabel>
+        <RadioGroup
+          row
+          value={sizingMode}
+          onChange={(e) => setSizingMode(e.target.value)}
+        >
+          <FormControlLabel
+            value="optimal"
+            control={<Radio />}
+            label="Find Optimal Sizing"
+          />
+          <FormControlLabel
+            value="existing"
+            control={<Radio />}
+            label="Model Selected Design"
+          />
+        </RadioGroup>
+      </FormControl>
       <Card>
         <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <FormControlLabel
@@ -747,7 +790,7 @@ function App() {
             <>
               <Typography variant="h6">Solar</Typography>
               <TextField
-                label="Max kW"
+                label={sizingMode === "optimal" ? "Max kW" : "Existing kW"}
                 type="number"
                 fullWidth
                 value={pvMaxKw}
@@ -775,7 +818,7 @@ function App() {
             <>
               <Typography variant="h6">Battery Storage</Typography>
               <TextField
-                label="Max kW"
+                label={sizingMode === "optimal" ? "Max kW" : "Existing kW"}
                 type="number"
                 fullWidth
                 value={storageMaxKw}
@@ -785,7 +828,7 @@ function App() {
                 }
               />
               <TextField
-                label="Max kWh"
+                label={sizingMode === "optimal" ? "Max kWh" : "Existing kWh"}
                 type="number"
                 fullWidth
                 value={storageMaxKwh}
@@ -813,7 +856,7 @@ function App() {
             <>
               <Typography variant="h6">Generators</Typography>
               <TextField
-                label="Max kW"
+                label={sizingMode === "optimal" ? "Max kW" : "Existing kW"}
                 type="number"
                 fullWidth
                 value={generatorMaxKw}

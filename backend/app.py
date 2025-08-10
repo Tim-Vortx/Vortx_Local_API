@@ -65,6 +65,20 @@ def submit():
         scenario = request.get_json()
         logging.info(f"Received scenario for submission: {scenario}")
 
+        # If technologies include existing sizes without max bounds, fix them
+        pv = scenario.get("PV")
+        if isinstance(pv, dict) and "existing_kw" in pv and "max_kw" not in pv:
+            pv["max_kw"] = pv["existing_kw"]
+        batt = scenario.get("ElectricStorage")
+        if isinstance(batt, dict):
+            if "existing_kw" in batt and "max_kw" not in batt:
+                batt["max_kw"] = batt["existing_kw"]
+            if "existing_kwh" in batt and "max_kwh" not in batt:
+                batt["max_kwh"] = batt["existing_kwh"]
+        gen = scenario.get("Generator")
+        if isinstance(gen, dict) and "existing_kw" in gen and "max_kw" not in gen:
+            gen["max_kw"] = gen["existing_kw"]
+
         # Basic input validation before logging and forwarding
         site = scenario.get("Site")
         el_load = scenario.get("ElectricLoad", {})
