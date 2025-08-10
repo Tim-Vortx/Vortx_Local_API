@@ -1057,7 +1057,7 @@ function App() {
       {outputs && (
         <Box mt={4}>
           <Typography variant="h5" gutterBottom>
-            Daily Operations
+            Outputs
           </Typography>
           <TextField
             type="number"
