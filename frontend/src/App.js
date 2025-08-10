@@ -257,7 +257,7 @@ function App() {
   const [dayIndex, setDayIndex] = useState(0);
   const [tph, setTph] = useState(1);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState(0); // 0: Inputs, 1: Results
+  const [tab, setTab] = useState(0); // 0: Utility & Load Data, 1: Microgrid Design, 2: Financial Outputs, 3: Performance Data
 
   useEffect(() => {
     const loadSchema = async () => {
@@ -601,360 +601,352 @@ function App() {
     setDailyData(reoptToDailySeries(results, dayIndex, tph));
   }, [results, dayIndex, tph]);
 
-  return (
-    <Container sx={{ py: 4 }}>
-      <Typography variant="h4" gutterBottom>
-        REopt MVP
-      </Typography>
-      <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ mb: 2 }}>
-        <Tab label="Inputs" />
-        <Tab label="Results" />
-      </Tabs>
-      {tab === 0 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <Card>
-            <CardContent
-              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+  useEffect(() => {
+    if (tab !== 3) setDayIndex(0);
+  }, [tab]);
+
+  const UtilityLoadPanel = () => (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <Card>
+        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Typography variant="h6">Site</Typography>
+          <TextField
+            label="Address or Zip Code"
+            fullWidth
+            value={location}
+            onChange={(e) => {
+              setLocation(e.target.value);
+              setUrdbLabel("");
+              setTariffs([]);
+            }}
+            onBlur={fetchTariffs}
+          />
+          {tariffs.length > 0 && (
+            <TextField
+              select
+              label="Electric Tariff"
+              value={urdbLabel}
+              onChange={(e) => setUrdbLabel(e.target.value)}
             >
-              <Typography variant="h6">Site</Typography>
+              {tariffs.map((t) => (
+                <MenuItem key={t.label} value={t.label}>
+                  {t.name || t.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Typography variant="h6">Load Profile</Typography>
+          <Tabs value={loadTab} onChange={(e, v) => setLoadTab(v)}>
+            <Tab label="Upload CSV" />
+            <Tab label="Generate" />
+          </Tabs>
+          <TextField
+            label="Load Year"
+            type="number"
+            value={loadYear}
+            onChange={(e) => setLoadYear(parseInt(e.target.value, 10) || 0)}
+          />
+          {loadTab === 0 && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Button variant="contained" component="label">
+                Upload 8760
+                <input
+                  type="file"
+                  hidden
+                  accept=".csv"
+                  onChange={handleLoadFile}
+                />
+              </Button>
+              {loadFileName && <Typography>{loadFileName}</Typography>}
+            </Box>
+          )}
+          {loadTab === 1 && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <TextField
-                label="Address or Zip Code"
-                fullWidth
-                value={location}
-                onChange={(e) => {
-                  setLocation(e.target.value);
-                  setUrdbLabel("");
-                  setTariffs([]);
-                }}
-                onBlur={fetchTariffs}
-              />
-              {tariffs.length > 0 && (
-                <TextField
-                  select
-                  label="Electric Tariff"
-                  value={urdbLabel}
-                  onChange={(e) => setUrdbLabel(e.target.value)}
-                >
-                  {tariffs.map((t) => (
-                    <MenuItem key={t.label} value={t.label}>
-                      {t.name || t.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent
-              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
-            >
-              <Typography variant="h6">Load Profile</Typography>
-              <Tabs value={loadTab} onChange={(e, v) => setLoadTab(v)}>
-                <Tab label="Upload CSV" />
-                <Tab label="Generate" />
-              </Tabs>
-              <TextField
-                label="Load Year"
+                label="Peak Load (kW)"
                 type="number"
-                value={loadYear}
+                value={peakLoad}
+                onChange={(e) => setPeakLoad(e.target.value)}
+              />
+              <TextField
+                label="Load Factor"
+                type="number"
+                value={genLoadFactor}
+                onChange={(e) => setGenLoadFactor(e.target.value)}
+              />
+              <TextField
+                select
+                label="Site Type"
+                value={siteType}
+                onChange={(e) => setSiteType(e.target.value)}
+              >
+                <MenuItem value="industrial">Industrial</MenuItem>
+                <MenuItem value="manufacturing">Manufacturing</MenuItem>
+                <MenuItem value="cold_storage">Cold Storage</MenuItem>
+              </TextField>
+              <Button variant="outlined" onClick={generateProfile}>
+                Generate
+              </Button>
+            </Box>
+          )}
+          {loadSummary && (
+            <Box>
+              <Typography variant="subtitle1">Summary</Typography>
+              <Typography>
+                Total Annual kWh: {loadSummary.total.toFixed(1)}
+              </Typography>
+              <Typography>
+                Peak Load: {loadSummary.peak.toFixed(1)} kW
+              </Typography>
+              <Typography>
+                Load Factor: {loadSummary.loadFactor.toFixed(2)}
+              </Typography>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+    </Box>
+  );
+
+  const MicrogridDesignPanel = () => (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <Card>
+        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={usePv}
+                onChange={(e) => setUsePv(e.target.checked)}
+              />
+            }
+            label="Include Solar"
+          />
+          {usePv && (
+            <>
+              <Typography variant="h6">Solar</Typography>
+              <TextField
+                label="Max kW"
+                type="number"
+                fullWidth
+                value={pvMaxKw}
+                onChange={(e) => setPvMaxKw(e.target.value)}
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={useStorage}
+                onChange={(e) => setUseStorage(e.target.checked)}
+              />
+            }
+            label="Include Battery Storage"
+          />
+          {useStorage && (
+            <>
+              <Typography variant="h6">Battery Storage</Typography>
+              <TextField
+                label="Max kW"
+                type="number"
+                fullWidth
+                value={storageMaxKw}
+                onChange={(e) => setStorageMaxKw(e.target.value)}
+              />
+              <TextField
+                label="Max kWh"
+                type="number"
+                fullWidth
+                value={storageMaxKwh}
+                onChange={(e) => setStorageMaxKwh(e.target.value)}
+              />
+            </>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={useGenerator}
+                onChange={(e) => setUseGenerator(e.target.checked)}
+              />
+            }
+            label="Include Generators"
+          />
+          {useGenerator && (
+            <>
+              <Typography variant="h6">Generators</Typography>
+              <TextField
+                label="Max kW"
+                type="number"
+                fullWidth
+                value={generatorMaxKw}
+                onChange={(e) => setGeneratorMaxKw(e.target.value)}
+              />
+              <TextField
+                select
+                label="Fuel Type"
+                fullWidth
+                value={generatorFuelType}
+                onChange={(e) => setGeneratorFuelType(e.target.value)}
+              >
+                <MenuItem value="diesel">Diesel</MenuItem>
+                <MenuItem value="natural_gas">Natural Gas</MenuItem>
+                <MenuItem value="diesel_and_natural_gas">
+                  Diesel &amp; Natural Gas
+                </MenuItem>
+              </TextField>
+            </>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Typography variant="h6">Cost Estimates</Typography>
+          {usePv && (
+            <TextField
+              label="PV Cost per kW ($)"
+              type="number"
+              fullWidth
+              value={pvCost}
+              onChange={(e) => setPvCost(e.target.value)}
+            />
+          )}
+          {useGenerator && generatorFuelType === "diesel" && (
+            <TextField
+              label="Generator Fuel Cost ($/gal)"
+              type="number"
+              fullWidth
+              value={generatorFuelCostPerGallon}
+              onChange={(e) =>
+                setGeneratorFuelCostPerGallon(e.target.value)
+              }
+            />
+          )}
+          {useGenerator && generatorFuelType === "natural_gas" && (
+            <TextField
+              label="Generator Fuel Cost ($/MMBtu)"
+              type="number"
+              fullWidth
+              value={generatorFuelCostPerMmbtu}
+              onChange={(e) => setGeneratorFuelCostPerMmbtu(e.target.value)}
+            />
+          )}
+          {useGenerator && generatorFuelType === "diesel_and_natural_gas" && (
+            <>
+              <TextField
+                label="Diesel Fuel Cost ($/gal)"
+                type="number"
+                fullWidth
+                value={generatorFuelCostPerGallon}
                 onChange={(e) =>
-                  setLoadYear(parseInt(e.target.value, 10) || 0)
+                  setGeneratorFuelCostPerGallon(e.target.value)
+                }
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                label="Natural Gas Fuel Cost ($/MMBtu)"
+                type="number"
+                fullWidth
+                value={generatorFuelCostPerMmbtu}
+                onChange={(e) =>
+                  setGeneratorFuelCostPerMmbtu(e.target.value)
                 }
               />
-              {loadTab === 0 && (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <Button variant="contained" component="label">
-                    Upload 8760
-                    <input
-                      type="file"
-                      hidden
-                      accept=".csv"
-                      onChange={handleLoadFile}
-                    />
-                  </Button>
-                  {loadFileName && <Typography>{loadFileName}</Typography>}
-                </Box>
-              )}
-              {loadTab === 1 && (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <TextField
-                    label="Peak Load (kW)"
-                    type="number"
-                    value={peakLoad}
-                    onChange={(e) => setPeakLoad(e.target.value)}
-                  />
-                  <TextField
-                    label="Load Factor"
-                    type="number"
-                    value={genLoadFactor}
-                    onChange={(e) => setGenLoadFactor(e.target.value)}
-                  />
-                  <TextField
-                    select
-                    label="Site Type"
-                    value={siteType}
-                    onChange={(e) => setSiteType(e.target.value)}
-                  >
-                    <MenuItem value="industrial">Industrial</MenuItem>
-                    <MenuItem value="manufacturing">Manufacturing</MenuItem>
-                    <MenuItem value="cold_storage">Cold Storage</MenuItem>
-                  </TextField>
-                  <Button variant="outlined" onClick={generateProfile}>
-                    Generate
-                  </Button>
-                </Box>
-              )}
-              {loadSummary && (
-                <Box>
-                  <Typography variant="subtitle1">Summary</Typography>
-                  <Typography>
-                    Total Annual kWh: {loadSummary.total.toFixed(1)}
-                  </Typography>
-                  <Typography>
-                    Peak Load: {loadSummary.peak.toFixed(1)} kW
-                  </Typography>
-                  <Typography>
-                    Load Factor: {loadSummary.loadFactor.toFixed(2)}
-                  </Typography>
-                </Box>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent
-              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
-            >
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={usePv}
-                    onChange={(e) => setUsePv(e.target.checked)}
-                  />
-                }
-                label="Include Solar"
+            </>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Typography variant="h6">Operations</Typography>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={offGrid}
+                onChange={(e) => setOffGrid(e.target.checked)}
               />
-              {usePv && (
-                <>
-                  <Typography variant="h6">Solar</Typography>
-                  <TextField
-                    label="Max kW"
-                    type="number"
-                    fullWidth
-                    value={pvMaxKw}
-                    onChange={(e) => setPvMaxKw(e.target.value)}
-                  />
-                </>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent
-              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
-            >
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={useStorage}
-                    onChange={(e) => setUseStorage(e.target.checked)}
-                  />
-                }
-                label="Include Battery Storage"
+            }
+            label="Off Grid"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={bessCanExport}
+                onChange={(e) => setBessCanExport(e.target.checked)}
               />
-              {useStorage && (
-                <>
-                  <Typography variant="h6">Battery Storage</Typography>
-                  <TextField
-                    label="Max kW"
-                    type="number"
-                    fullWidth
-                    value={storageMaxKw}
-                    onChange={(e) => setStorageMaxKw(e.target.value)}
-                  />
-                  <TextField
-                    label="Max kWh"
-                    type="number"
-                    fullWidth
-                    value={storageMaxKwh}
-                    onChange={(e) => setStorageMaxKwh(e.target.value)}
-                  />
-                </>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent
-              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
-            >
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={useGenerator}
-                    onChange={(e) => setUseGenerator(e.target.checked)}
-                  />
-                }
-                label="Include Generators"
+            }
+            label="BESS can Export"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={bessSolarOnly}
+                onChange={(e) => setBessSolarOnly(e.target.checked)}
               />
-              {useGenerator && (
-                <>
-                  <Typography variant="h6">Generators</Typography>
-                  <TextField
-                    label="Max kW"
-                    type="number"
-                    fullWidth
-                    value={generatorMaxKw}
-                    onChange={(e) => setGeneratorMaxKw(e.target.value)}
-                  />
-                  <TextField
-                    select
-                    label="Fuel Type"
-                    fullWidth
-                    value={generatorFuelType}
-                    onChange={(e) => setGeneratorFuelType(e.target.value)}
-                  >
-                    <MenuItem value="diesel">Diesel</MenuItem>
-                    <MenuItem value="natural_gas">Natural Gas</MenuItem>
-                    <MenuItem value="diesel_and_natural_gas">
-                      Diesel &amp; Natural Gas
-                    </MenuItem>
-                  </TextField>
-                </>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent
-              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
-            >
-              <Typography variant="h6">Cost Estimates</Typography>
-              {usePv && (
-                <TextField
-                  label="PV Cost per kW ($)"
-                  type="number"
-                  fullWidth
-                  value={pvCost}
-                  onChange={(e) => setPvCost(e.target.value)}
-                />
-              )}
-              {useGenerator && generatorFuelType === "diesel" && (
-                <TextField
-                  label="Generator Fuel Cost ($/gal)"
-                  type="number"
-                  fullWidth
-                  value={generatorFuelCostPerGallon}
-                  onChange={(e) =>
-                    setGeneratorFuelCostPerGallon(e.target.value)
-                  }
-                />
-              )}
-              {useGenerator && generatorFuelType === "natural_gas" && (
-                <TextField
-                  label="Generator Fuel Cost ($/MMBtu)"
-                  type="number"
-                  fullWidth
-                  value={generatorFuelCostPerMmbtu}
-                  onChange={(e) => setGeneratorFuelCostPerMmbtu(e.target.value)}
-                />
-              )}
-              {useGenerator &&
-                generatorFuelType === "diesel_and_natural_gas" && (
-                  <>
-                    <TextField
-                      label="Diesel Fuel Cost ($/gal)"
-                      type="number"
-                      fullWidth
-                      value={generatorFuelCostPerGallon}
-                      onChange={(e) =>
-                        setGeneratorFuelCostPerGallon(e.target.value)
-                      }
-                      sx={{ mb: 2 }}
-                    />
-                    <TextField
-                      label="Natural Gas Fuel Cost ($/MMBtu)"
-                      type="number"
-                      fullWidth
-                      value={generatorFuelCostPerMmbtu}
-                      onChange={(e) =>
-                        setGeneratorFuelCostPerMmbtu(e.target.value)
-                      }
-                    />
-                  </>
-                )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent
-              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
-            >
-              <Typography variant="h6">Operations</Typography>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={offGrid}
-                    onChange={(e) => setOffGrid(e.target.checked)}
-                  />
-                }
-                label="Off Grid"
+            }
+            label="BESS charges from Solar only"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={solarCanExport}
+                onChange={(e) => setSolarCanExport(e.target.checked)}
               />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={bessCanExport}
-                    onChange={(e) => setBessCanExport(e.target.checked)}
-                  />
-                }
-                label="BESS can Export"
+            }
+            label="Solar can Export"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={genCanExport}
+                onChange={(e) => setGenCanExport(e.target.checked)}
               />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={bessSolarOnly}
-                    onChange={(e) => setBessSolarOnly(e.target.checked)}
-                  />
-                }
-                label="BESS charges from Solar only"
+            }
+            label="Generator can Export"
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={genChargeBess}
+                onChange={(e) => setGenChargeBess(e.target.checked)}
               />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={solarCanExport}
-                    onChange={(e) => setSolarCanExport(e.target.checked)}
-                  />
-                }
-                label="Solar can Export"
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={genCanExport}
-                    onChange={(e) => setGenCanExport(e.target.checked)}
-                  />
-                }
-                label="Generator can Export"
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={genChargeBess}
-                    onChange={(e) => setGenChargeBess(e.target.checked)}
-                  />
-                }
-                label="Generator can charge BESS"
-              />
-            </CardContent>
-          </Card>
-          <Box mt={2} mb={2}>
-            <Button variant="contained" onClick={submit} disabled={!urdbLabel}>
-              Run REopt
-            </Button>
-          </Box>
-        </Box>
-      )}
-      {tab === 1 && (
-        <Box>
-          <Typography>Status: {status}</Typography>
-          {error && (
-            <Typography color="error" gutterBottom>
-              Error: {error}
+            }
+            label="Generator can charge BESS"
+          />
+        </CardContent>
+      </Card>
+      <Box mt={2} mb={2}>
+        <Button variant="contained" onClick={submit} disabled={!urdbLabel}>
+          Run REopt
+        </Button>
+      </Box>
+    </Box>
+  );
+
+  const FinancialOutputsPanel = () => {
+    if (!outputs)
+      return <Typography>No financial results available.</Typography>;
+    const { npv_us_dollars, payback_years, lcc } = outputs;
+    return (
+      <Card>
+        <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Typography variant="h6">Financial Outputs</Typography>
+          {npv_us_dollars !== undefined && (
+            <Typography>
+              Net Present Value: $
+              {npv_us_dollars.toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+              })}
             </Typography>
           )}
           {outputs && (
@@ -988,9 +980,65 @@ function App() {
                 <RenderOutputs data={outputs} />
               </Paper>
             </Box>
+          {payback_years !== undefined && (
+            <Typography>Payback Period: {payback_years} years</Typography>
           )}
+          {lcc !== undefined && (
+            <Typography>
+              Life Cycle Cost: $
+              {lcc.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const PerformancePanel = () => (
+    <Box>
+      <Typography>Status: {status}</Typography>
+      {error && (
+        <Typography color="error" gutterBottom>
+          Error: {error}
+        </Typography>
+      )}
+      {outputs && (
+        <Box mt={4}>
+          <Typography variant="h5" gutterBottom>
+            Daily Operations
+          </Typography>
+          <TextField
+            type="number"
+            label="Day (0-364)"
+            value={dayIndex}
+            onChange={(e) =>
+              setDayIndex(
+                Math.min(364, Math.max(0, parseInt(e.target.value || "0", 10))),
+              )
+            }
+            sx={{ mb: 2 }}
+          />
+          <PowerChart data={dailyData} />
         </Box>
       )}
+    </Box>
+  );
+
+  return (
+    <Container sx={{ py: 4 }}>
+      <Typography variant="h4" gutterBottom>
+        REopt MVP
+      </Typography>
+      <Tabs value={tab} onChange={(e, v) => setTab(v)} sx={{ mb: 2 }}>
+        <Tab label="Utility & Load Data" />
+        <Tab label="Microgrid Design" />
+        <Tab label="Financial Outputs" />
+        <Tab label="Performance Data & Visualizations" />
+      </Tabs>
+      {tab === 0 && <UtilityLoadPanel />}
+      {tab === 1 && <MicrogridDesignPanel />}
+      {tab === 2 && <FinancialOutputsPanel />}
+      {tab === 3 && <PerformancePanel />}
     </Container>
   );
 }
