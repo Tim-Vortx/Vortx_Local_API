@@ -2,16 +2,13 @@ import React, { useState } from 'react';
 import {
   Box,
   Typography,
-  IconButton,
   FormGroup,
   FormControlLabel,
   Checkbox,
 } from '@mui/material';
-import ShareIcon from '@mui/icons-material/Share';
 import {
   AreaChart,
   Area,
-  LineChart,
   Line,
   XAxis,
   YAxis,
@@ -34,14 +31,6 @@ const defaultData = Array.from({ length: hours }, (_, i) => {
     h >= 0 && h <= 5 ? 200 : h >= 12 && h <= 15 ? -200 : 0;
   const utility = load + bess + solar;
   return { timestamp: t.getTime(), load, solar, bess, utility };
-});
-
-// weather mini-chart data
-const defaultWeatherData = defaultData.map((d, idx) => {
-  const ghi = 500 + 200 * Math.sin((idx / hours) * Math.PI * 2);
-  const temp = 25 + 10 * Math.sin((idx / hours) * Math.PI * 4 + 1);
-  const wind = 5 + 2 * Math.sin((idx / hours) * Math.PI * 8 + 2);
-  return { timestamp: d.timestamp, ghi, temp, wind };
 });
 
 const defaultEvents = [
@@ -68,8 +57,6 @@ const overlayKeys = [
   { key: 'bess_export', stroke: '#BBDEFB', fill: '#BBDEFB' },
   { key: 'diesel_export', stroke: '#FFE0B2', fill: '#FFE0B2' },
   { key: 'ng_export', stroke: '#D7CCC8', fill: '#D7CCC8' },
-  { key: 'missing', stroke: '#FFCC80', fill: '#FFCC80' },
-  { key: 'alarms', stroke: '#EF5350', fill: '#EF5350' },
 ];
 
 export default function PowerChart({ data = defaultData }) {
@@ -86,8 +73,6 @@ export default function PowerChart({ data = defaultData }) {
     bess_export: true,
     diesel_export: true,
     ng_export: true,
-    missing: false,
-    alarms: false,
   });
   const [range, setRange] = useState({
     startIndex: 0,
@@ -107,29 +92,12 @@ export default function PowerChart({ data = defaultData }) {
   const filtered = data.slice(range.startIndex, range.endIndex + 1);
   const startTime = filtered[0]?.timestamp || 0;
   const endTime = filtered[filtered.length - 1]?.timestamp || 0;
-  const weatherData = data === defaultData ? defaultWeatherData : [];
   const events = data === defaultData ? defaultEvents : [];
 
 
   return (
     <Box sx={{ width: '100%', height: 400 }}>
-      <Box display="flex" alignItems="center" mb={1}>
-        <Typography variant="subtitle1">Power</Typography>
-        <Box flexGrow={1} mx={2}>
-          <ResponsiveContainer width="100%" height={40}>
-            <LineChart data={weatherData} margin={{ top: 5, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <Line type="monotone" dataKey="ghi" stroke="#FFEB3B" dot={false} strokeWidth={1} />
-              <Line type="monotone" dataKey="temp" stroke="#9E9E9E" dot={false} strokeWidth={1} />
-              <Line type="monotone" dataKey="wind" stroke="#2196F3" dot={false} strokeWidth={1} />
-              <XAxis hide dataKey="timestamp" type="number" domain={[startTime, endTime]} />
-              <YAxis hide />
-            </LineChart>
-          </ResponsiveContainer>
-        </Box>
-        <IconButton size="small"><ShareIcon fontSize="small" /></IconButton>
-      </Box>
-
+      <Typography variant="subtitle1" mb={1}>Power</Typography>
       <Box display="flex" height={300}>
         <Box flexGrow={1}>
           <ResponsiveContainer width="100%" height="100%">
@@ -262,14 +230,6 @@ export default function PowerChart({ data = defaultData }) {
             <FormControlLabel
               control={<Checkbox checked={show.ng_to_load} onChange={handleLegend('ng_to_load')} />}
               label={<Box display="flex" alignItems="center"><Box sx={{ width: 16, height: 10, backgroundColor: '#D7CCC8', mr: 1 }} />NG (CHP) → Load</Box>}
-            />
-            <FormControlLabel
-              control={<Checkbox checked={show.missing} onChange={handleLegend('missing')} />}
-              label={<Box display="flex" alignItems="center"><Box sx={{ width: 16, height: 10, backgroundColor: '#FFCC80', mr: 1 }} />Missing Data</Box>}
-            />
-            <FormControlLabel
-              control={<Checkbox checked={show.alarms} onChange={handleLegend('alarms')} />}
-              label={<Box display="flex" alignItems="center"><Box sx={{ width: 16, height: 10, backgroundColor: '#EF5350', mr: 1 }} />Alarms</Box>}
             />
           </FormGroup>
         </Box>
