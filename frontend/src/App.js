@@ -263,11 +263,19 @@ function summarizeLoads(arr) {
   return { total, peak, loadFactor };
 }
 
+function validateTariff(tariff, schema) {
+  if (!tariff || typeof tariff !== "object") return false;
+  const tariffSchema = schema?.components?.schemas?.ElectricTariff;
+  const variants = tariffSchema?.oneOf;
+  if (!Array.isArray(variants)) return true;
+  return variants.some((v) => {
+    const required = v.required || [];
+    return required.every((k) => tariff[k] !== undefined);
+  });
+}
+
 function App() {
   const [location, setLocation] = useState("");
-  const [doeRefName, setDoeRefName] = useState(
-    minimalScenario.ElectricLoad.doe_reference_name,
-  );
   const [pvMaxKw, setPvMaxKw] = useState(0);
   const [pvCost, setPvCost] = useState(
     minimalScenario.PV.installed_cost_per_kw,
@@ -290,16 +298,10 @@ function App() {
   const [solarCanExport, setSolarCanExport] = useState(false);
   const [genCanExport, setGenCanExport] = useState(false);
   const [genChargeBess, setGenChargeBess] = useState(false);
-
-  const [energyRate, setEnergyRate] = useState(
-    minimalScenario.ElectricTariff.blended_annual_energy_rate,
-  );
-  const [demandRate, setDemandRate] = useState(
-    minimalScenario.ElectricTariff.blended_annual_demand_rate,
-  );
   const [tariffs, setTariffs] = useState([]);
   const [urdbLabel, setUrdbLabel] = useState("");
   const [offGrid, setOffGrid] = useState(false);
+  const [schema, setSchema] = useState(null);
 
   const initialLoads = useMemo(
     () => Array(8760).fill(minimalScenario.ElectricLoad.annual_kwh / 8760),
@@ -322,6 +324,19 @@ function App() {
   const [error, setError] = useState("");
   const [day, setDay] = useState(0); // day of year for chart
   const [tab, setTab] = useState(0); // 0: Inputs, 1: Results
+
+  useEffect(() => {
+    const loadSchema = async () => {
+      try {
+        const res = await fetch("/schema");
+        const data = await res.json();
+        setSchema(data);
+      } catch (e) {
+        console.error("Schema fetch failed", e);
+      }
+    };
+    loadSchema();
+  }, []);
 
   // Polling configuration
   const baseDelay = parseInt(
@@ -455,24 +470,30 @@ function App() {
       setLoadSummary(summary);
     }
 
+    if (!urdbLabel) {
+      setError("Please select an electric tariff");
+      setStatus("Error");
+      return;
+    }
+
     const scenario = {
       Site: { latitude: lat, longitude: lon },
       ElectricLoad: {
         year: loadYear,
         loads_kw: loads,
         annual_kwh: summary.total,
-        doe_reference_name: doeRefName,
       },
-      ElectricTariff: urdbLabel
-        ? { urdb_label: urdbLabel }
-        : {
-            blended_annual_energy_rate: parseFloat(energyRate),
-            blended_annual_demand_rate: parseFloat(demandRate),
-          },
+      ElectricTariff: { urdb_label: urdbLabel },
       ElectricUtility: minimalScenario.ElectricUtility,
       Financial: minimalScenario.Financial,
       Settings: { off_grid_flag: offGrid },
     };
+
+    if (!validateTariff(scenario.ElectricTariff, schema)) {
+      setError("ElectricTariff is invalid");
+      setStatus("Error");
+      return;
+    }
 
     if (usePv) {
       scenario.PV = {
@@ -698,11 +719,13 @@ function App() {
                 label="Address or Zip Code"
                 fullWidth
                 value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                onChange={(e) => {
+                  setLocation(e.target.value);
+                  setUrdbLabel("");
+                  setTariffs([]);
+                }}
+                onBlur={fetchTariffs}
               />
-              <Button variant="outlined" onClick={fetchTariffs}>
-                Fetch Tariffs
-              </Button>
               {tariffs.length > 0 && (
                 <TextField
                   select
@@ -728,6 +751,14 @@ function App() {
                 <Tab label="Upload CSV" />
                 <Tab label="Generate" />
               </Tabs>
+              <TextField
+                label="Load Year"
+                type="number"
+                value={loadYear}
+                onChange={(e) =>
+                  setLoadYear(parseInt(e.target.value, 10) || 0)
+                }
+              />
               {loadTab === 0 && (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <Button variant="contained" component="label">
@@ -785,37 +816,8 @@ function App() {
                   </Typography>
                 </Box>
               )}
-              <TextField
-                label="DOE Reference Name"
-                fullWidth
-                value={doeRefName}
-                onChange={(e) => setDoeRefName(e.target.value)}
-              />
             </CardContent>
           </Card>
-          {!urdbLabel && (
-            <Card>
-              <CardContent
-                sx={{ display: "flex", flexDirection: "column", gap: 2 }}
-              >
-                <Typography variant="h6">Utility Inputs</Typography>
-                <TextField
-                  label="Energy Rate ($/kWh)"
-                  type="number"
-                  fullWidth
-                  value={energyRate}
-                  onChange={(e) => setEnergyRate(e.target.value)}
-                />
-                <TextField
-                  label="Demand Rate ($/kW)"
-                  type="number"
-                  fullWidth
-                  value={demandRate}
-                  onChange={(e) => setDemandRate(e.target.value)}
-                />
-              </CardContent>
-            </Card>
-          )}
           <Card>
             <CardContent
               sx={{ display: "flex", flexDirection: "column", gap: 2 }}
@@ -1039,7 +1041,7 @@ function App() {
             </CardContent>
           </Card>
           <Box mt={2} mb={2}>
-            <Button variant="contained" onClick={submit}>
+            <Button variant="contained" onClick={submit} disabled={!urdbLabel}>
               Run REopt
             </Button>
           </Box>
