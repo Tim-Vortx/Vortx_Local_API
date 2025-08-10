@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import minimalScenario from "./minimalScenario.json";
+import { reoptToDailySeries } from "./reoptTransform";
 import {
   Container,
   Typography,
@@ -20,8 +21,6 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PowerChart from "./PowerChart";
-import { reoptToDailySeries } from "./reoptTransform";
-
 
 // Normalized 8760-hour load shapes for various facility types
 const BASE_SHAPES = {
@@ -143,38 +142,6 @@ function RenderOutputs({ data }) {
   );
 }
 
-// Find all timeseries arrays (length 8760) within the outputs
-function extractTimeSeries(outputs) {
-  const series = [];
-  const walk = (obj, prefix = "") => {
-    if (!obj || typeof obj !== "object") return;
-    Object.entries(obj).forEach(([k, v]) => {
-      const path = prefix ? `${prefix}.${k}` : k;
-      if (
-        Array.isArray(v) &&
-        (v.length === 8760 || v.length === 35040) &&
-        v.every((n) => typeof n === "number")
-      ) {
-        // If 35040 samples (15-min resolution), convert to hourly by averaging every 4 samples
-        const hourly =
-          v.length === 35040
-            ? Array.from({ length: 8760 }, (_, idx) => {
-                const base = idx * 4;
-                return (
-                  (v[base] + v[base + 1] + v[base + 2] + v[base + 3]) / 4
-                );
-              })
-            : v;
-        series.push({ key: path.replace(/\./g, "_"), label: path, values: hourly });
-      } else if (v && typeof v === "object") {
-        walk(v, path);
-      }
-    });
-  };
-  walk(outputs);
-  return series;
-}
-
 // Parse an uploaded CSV containing hourly (8760) or 15-min (35040)
 // kW load values. Optionally the first column may contain timestamps
 // from which a year will be extracted.
@@ -279,6 +246,7 @@ function App() {
 
   const [runUuid, setRunUuid] = useState(null);
   const [status, setStatus] = useState("");
+  const [outputs, setOutputs] = useState(null);
   const [results, setResults] = useState(null);
   const [dailyData, setDailyData] = useState([]);
   const [dayIndex, setDayIndex] = useState(0);
@@ -390,8 +358,7 @@ function App() {
 
   const submit = async () => {
     setError("");
-    setResults(null);
-    setDailyData([]);
+    setOutputs(null);
     setRunUuid(null);
     
     // Geocode the user-provided location into latitude and longitude
@@ -521,9 +488,7 @@ function App() {
         return;
       }
       setRunUuid(run_uuid);
-      setResults(null);
-      setDailyData([]);
-      setDayIndex(0);
+      setOutputs(null);
       setStatus("Queued: " + run_uuid);
     } catch (e) {
       setError(e.message);
@@ -584,31 +549,9 @@ function App() {
         const s = data?.status || data?.data?.status || "";
         setStatus(s);
 
-        // When completed, fetch final results
+        // Bail out on either optimal (v2) or Completed (v3) status
         if (["optimal", "completed"].includes(s.toLowerCase())) {
-          try {
-            const res = await fetch(`/results/${encodeURIComponent(runUuid)}`);
-            const textRes = await res.text();
-            let dataRes = null;
-            try {
-              dataRes = JSON.parse(textRes);
-            } catch {}
-            if (!res.ok) {
-              const message =
-                (dataRes && dataRes.error) || textRes || res.statusText;
-              setError(message);
-              setStatus("Error");
-            } else {
-              setResults(dataRes);
-              const steps =
-                dataRes?.outputs?.Scenario?.Settings?.time_steps_per_hour || 1;
-              setTph(steps);
-              setDailyData(reoptToDailySeries(dataRes, 0, steps));
-            }
-          } catch (e) {
-            setError(e.message);
-            setStatus("Error");
-          }
+          setOutputs(data?.outputs || data?.data?.outputs || null);
           return;
         }
 
@@ -626,10 +569,27 @@ function App() {
     return () => clearTimeout(timeoutId);
   }, [runUuid, baseDelay, maxWait]);
 
+  // Fetch detailed results and build daily chart data
   useEffect(() => {
-    if (results) {
-      setDailyData(reoptToDailySeries(results, dayIndex, tph));
-    }
+    if (!runUuid || !outputs) return;
+    const fetchResults = async () => {
+      try {
+        const res = await fetch(`/results/${encodeURIComponent(runUuid)}`);
+        const data = await res.json();
+        setResults(data);
+        const steps = data?.outputs?.Settings?.time_steps_per_hour || 1;
+        setTph(steps);
+        setDailyData(reoptToDailySeries(data, dayIndex, steps));
+      } catch (e) {
+        console.error("Results fetch failed", e);
+      }
+    };
+    fetchResults();
+  }, [runUuid, outputs]);
+
+  useEffect(() => {
+    if (!results) return;
+    setDailyData(reoptToDailySeries(results, dayIndex, tph));
   }, [results, dayIndex, tph]);
 
   return (
@@ -988,19 +948,23 @@ function App() {
               Error: {error}
             </Typography>
           )}
-          {results && (
+          {outputs && (
             <Box mt={4}>
               <Typography variant="h5" gutterBottom>
                 Outputs
               </Typography>
               <Box mb={4}>
+                <Typography variant="h6">Daily Operations</Typography>
                 <TextField
                   type="number"
-                  label="Day"
+                  label="Day (0-364)"
                   value={dayIndex}
                   onChange={(e) =>
                     setDayIndex(
-                      Math.max(0, parseInt(e.target.value || "0", 10)),
+                      Math.min(
+                        364,
+                        Math.max(0, parseInt(e.target.value || "0", 10)),
+                      ),
                     )
                   }
                   sx={{ mb: 2 }}
@@ -1008,7 +972,7 @@ function App() {
                 <PowerChart data={dailyData} />
               </Box>
               <Paper variant="outlined" sx={{ p: 2 }}>
-                <RenderOutputs data={results} />
+                <RenderOutputs data={outputs} />
               </Paper>
             </Box>
           )}
