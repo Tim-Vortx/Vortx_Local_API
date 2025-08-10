@@ -204,21 +204,21 @@ function validateTariff(tariff, schema) {
 
 function App() {
   const [location, setLocation] = useState("");
-  const [pvMaxKw, setPvMaxKw] = useState(0);
+  const [pvMaxKw, setPvMaxKw] = useState("0");
   const [pvCost, setPvCost] = useState(
-    minimalScenario.PV.installed_cost_per_kw,
+    String(minimalScenario.PV.installed_cost_per_kw),
   );
-  const [storageMaxKw, setStorageMaxKw] = useState(0);
-  const [storageMaxKwh, setStorageMaxKwh] = useState(0);
+  const [storageMaxKw, setStorageMaxKw] = useState("0");
+  const [storageMaxKwh, setStorageMaxKwh] = useState("0");
 
   const [usePv, setUsePv] = useState(false);
   const [useStorage, setUseStorage] = useState(false);
   const [useGenerator, setUseGenerator] = useState(false);
 
-  const [generatorMaxKw, setGeneratorMaxKw] = useState(0);
+  const [generatorMaxKw, setGeneratorMaxKw] = useState("0");
   const [generatorFuelCostPerGallon, setGeneratorFuelCostPerGallon] =
-    useState(3);
-  const [generatorFuelCostPerMmbtu, setGeneratorFuelCostPerMmbtu] = useState(6);
+    useState("3");
+  const [generatorFuelCostPerMmbtu, setGeneratorFuelCostPerMmbtu] = useState("6");
   const [generatorFuelType, setGeneratorFuelType] = useState("diesel");
 
   const [bessCanExport, setBessCanExport] = useState(false);
@@ -236,17 +236,20 @@ function App() {
     [],
   );
   const [loads, setLoads] = useState(initialLoads);
-  const [loadYear, setLoadYear] = useState(2017);
+  const [loadYear, setLoadYear] = useState("2017");
   const [loadSummary, setLoadSummary] = useState(() =>
     summarizeLoads(initialLoads),
   );
   const [loadTab, setLoadTab] = useState(0);
   const [loadFileName, setLoadFileName] = useState("");
-  const [peakLoad, setPeakLoad] = useState(0);
-  const [genLoadFactor, setGenLoadFactor] = useState(0.5);
+  const [peakLoad, setPeakLoad] = useState("0");
+  const [genLoadFactor, setGenLoadFactor] = useState("0.5");
   const [siteType, setSiteType] = useState("industrial");
 
-  const startDate = useMemo(() => new Date(loadYear, 0, 1), [loadYear]);
+  const startDate = useMemo(
+    () => new Date(parseInt(loadYear, 10) || 0, 0, 1),
+    [loadYear],
+  );
   const [selectedDate, setSelectedDate] = useState(startDate);
 
   const [runUuid, setRunUuid] = useState(null);
@@ -254,7 +257,7 @@ function App() {
   const [outputs, setOutputs] = useState(null);
   const [results, setResults] = useState(null);
   const [dailyData, setDailyData] = useState([]);
-  const [dayIndex, setDayIndex] = useState(0);
+  const [dayIndex, setDayIndex] = useState("0");
   const [tph, setTph] = useState(1);
   const [error, setError] = useState("");
   const [tab, setTab] = useState(0); // 0: Utility & Load Data, 1: Microgrid Design, 2: Financial Outputs, 3: Performance Data
@@ -331,7 +334,7 @@ function App() {
       arr.some((v) => v !== arr[0]),
       "Generated load profile is flat",
     );
-    setLoadYear(new Date().getFullYear());
+    setLoadYear(String(new Date().getFullYear()));
     setLoads(arr);
   };
 
@@ -417,7 +420,7 @@ function App() {
     const scenario = {
       Site: { latitude: lat, longitude: lon },
       ElectricLoad: {
-        year: loadYear,
+        year: parseInt(loadYear, 10),
         loads_kw: loads,
         annual_kwh: summary.total,
       },
@@ -588,7 +591,9 @@ function App() {
         setResults(data);
         const steps = data?.outputs?.Settings?.time_steps_per_hour || 1;
         setTph(steps);
-        setDailyData(reoptToDailySeries(data, dayIndex, steps));
+        setDailyData(
+          reoptToDailySeries(data, parseInt(dayIndex, 10) || 0, steps),
+        );
       } catch (e) {
         console.error("Results fetch failed", e);
       }
@@ -598,11 +603,13 @@ function App() {
 
   useEffect(() => {
     if (!results) return;
-    setDailyData(reoptToDailySeries(results, dayIndex, tph));
+    setDailyData(
+      reoptToDailySeries(results, parseInt(dayIndex, 10) || 0, tph),
+    );
   }, [results, dayIndex, tph]);
 
   useEffect(() => {
-    if (tab !== 3) setDayIndex(0);
+    if (tab !== 3) setDayIndex("0");
   }, [tab]);
 
   const UtilityLoadPanel = () => (
@@ -648,7 +655,10 @@ function App() {
             label="Load Year"
             type="number"
             value={loadYear}
-            onChange={(e) => setLoadYear(parseInt(e.target.value, 10) || 0)}
+            onChange={(e) => setLoadYear(e.target.value)}
+            onBlur={() =>
+              setLoadYear(String(parseInt(loadYear, 10) || 0))
+            }
           />
           {loadTab === 0 && (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -671,12 +681,18 @@ function App() {
                 type="number"
                 value={peakLoad}
                 onChange={(e) => setPeakLoad(e.target.value)}
+                onBlur={() =>
+                  setPeakLoad(String(parseFloat(peakLoad) || 0))
+                }
               />
               <TextField
                 label="Load Factor"
                 type="number"
                 value={genLoadFactor}
                 onChange={(e) => setGenLoadFactor(e.target.value)}
+                onBlur={() =>
+                  setGenLoadFactor(String(parseFloat(genLoadFactor) || 0))
+                }
               />
               <TextField
                 select
@@ -734,6 +750,9 @@ function App() {
                 fullWidth
                 value={pvMaxKw}
                 onChange={(e) => setPvMaxKw(e.target.value)}
+                onBlur={() =>
+                  setPvMaxKw(String(parseFloat(pvMaxKw) || 0))
+                }
               />
             </>
           )}
@@ -759,6 +778,9 @@ function App() {
                 fullWidth
                 value={storageMaxKw}
                 onChange={(e) => setStorageMaxKw(e.target.value)}
+                onBlur={() =>
+                  setStorageMaxKw(String(parseFloat(storageMaxKw) || 0))
+                }
               />
               <TextField
                 label="Max kWh"
@@ -766,6 +788,9 @@ function App() {
                 fullWidth
                 value={storageMaxKwh}
                 onChange={(e) => setStorageMaxKwh(e.target.value)}
+                onBlur={() =>
+                  setStorageMaxKwh(String(parseFloat(storageMaxKwh) || 0))
+                }
               />
             </>
           )}
@@ -791,6 +816,9 @@ function App() {
                 fullWidth
                 value={generatorMaxKw}
                 onChange={(e) => setGeneratorMaxKw(e.target.value)}
+                onBlur={() =>
+                  setGeneratorMaxKw(String(parseFloat(generatorMaxKw) || 0))
+                }
               />
               <TextField
                 select
@@ -819,6 +847,7 @@ function App() {
               fullWidth
               value={pvCost}
               onChange={(e) => setPvCost(e.target.value)}
+              onBlur={() => setPvCost(String(parseFloat(pvCost) || 0))}
             />
           )}
           {useGenerator && generatorFuelType === "diesel" && (
@@ -830,6 +859,11 @@ function App() {
               onChange={(e) =>
                 setGeneratorFuelCostPerGallon(e.target.value)
               }
+              onBlur={() =>
+                setGeneratorFuelCostPerGallon(
+                  String(parseFloat(generatorFuelCostPerGallon) || 0),
+                )
+              }
             />
           )}
           {useGenerator && generatorFuelType === "natural_gas" && (
@@ -839,6 +873,11 @@ function App() {
               fullWidth
               value={generatorFuelCostPerMmbtu}
               onChange={(e) => setGeneratorFuelCostPerMmbtu(e.target.value)}
+              onBlur={() =>
+                setGeneratorFuelCostPerMmbtu(
+                  String(parseFloat(generatorFuelCostPerMmbtu) || 0),
+                )
+              }
             />
           )}
           {useGenerator && generatorFuelType === "diesel_and_natural_gas" && (
@@ -851,6 +890,11 @@ function App() {
                 onChange={(e) =>
                   setGeneratorFuelCostPerGallon(e.target.value)
                 }
+                onBlur={() =>
+                  setGeneratorFuelCostPerGallon(
+                    String(parseFloat(generatorFuelCostPerGallon) || 0),
+                  )
+                }
                 sx={{ mb: 2 }}
               />
               <TextField
@@ -860,6 +904,11 @@ function App() {
                 value={generatorFuelCostPerMmbtu}
                 onChange={(e) =>
                   setGeneratorFuelCostPerMmbtu(e.target.value)
+                }
+                onBlur={() =>
+                  setGeneratorFuelCostPerMmbtu(
+                    String(parseFloat(generatorFuelCostPerMmbtu) || 0),
+                  )
                 }
               />
             </>
@@ -968,7 +1017,9 @@ function App() {
                         const diff = Math.floor(
                           (newValue - startDate) / (24 * 60 * 60 * 1000),
                         );
-                        setDayIndex(Math.min(364, Math.max(0, diff)));
+                        setDayIndex(
+                          String(Math.min(364, Math.max(0, diff))),
+                        );
                       }
                     }}
                     slotProps={{ textField: { sx: { mb: 2 } } }}
@@ -1012,9 +1063,15 @@ function App() {
             type="number"
             label="Day (0-364)"
             value={dayIndex}
-            onChange={(e) =>
+            onChange={(e) => setDayIndex(e.target.value)}
+            onBlur={() =>
               setDayIndex(
-                Math.min(364, Math.max(0, parseInt(e.target.value || "0", 10))),
+                String(
+                  Math.min(
+                    364,
+                    Math.max(0, parseInt(dayIndex || "0", 10)),
+                  ),
+                ),
               )
             }
             sx={{ mb: 2 }}
