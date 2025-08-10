@@ -404,5 +404,17 @@ def status(run_uuid):
     return jsonify(data)
 
 
+# Simple alias for frontend which expects a /results/<run_uuid> endpoint.
+# The current frontend fetches /results to get the full output object after
+# the status polling has indicated completion. Originally only /status
+# existed, so the fetch failed (404) and the power chart never received data.
+# By reusing the status handler we ensure identical behavior without
+# duplicating logic. Once the job is complete the first iteration of the
+# status loop returns immediately.
+@app.route("/results/<run_uuid>", methods=["GET"])
+def results_route(run_uuid):
+    return status(run_uuid)
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
