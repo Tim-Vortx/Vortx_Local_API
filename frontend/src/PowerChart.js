@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -57,10 +57,18 @@ const defaultEvents = [
 
 export default function PowerChart({ data = defaultData }) {
   const [show, setShow] = useState({
-    utility: true,
-    solar: true,
-    bess: true,
     load: true,
+    utility_to_load: true,
+    solar_to_load: true,
+    bess_to_load: true,
+    diesel_to_load: true,
+    ng_to_load: true,
+    solar_to_bess: true,
+    utility_to_bess: true,
+    solar_export: true,
+    bess_export: true,
+    diesel_export: true,
+    ng_export: true,
     missing: false,
     alarms: false,
   });
@@ -69,11 +77,13 @@ export default function PowerChart({ data = defaultData }) {
     endIndex: data.length - 1,
   });
 
+
   const handleLegend = (key) => (e) => {
     setShow({ ...show, [key]: e.target.checked });
   };
 
   const resetZoom = () => {
+
     setRange({ startIndex: 0, endIndex: data.length - 1 });
   };
 
@@ -82,6 +92,7 @@ export default function PowerChart({ data = defaultData }) {
   const endTime = filtered[filtered.length - 1]?.timestamp || 0;
   const weatherData = data === defaultData ? defaultWeatherData : [];
   const events = data === defaultData ? defaultEvents : [];
+
 
   return (
     <Box sx={{ width: '100%', height: 400 }}>
@@ -134,32 +145,30 @@ export default function PowerChart({ data = defaultData }) {
                 labelFormatter={(t) => new Date(t).toLocaleString()}
               />
               <ReferenceLine y={0} stroke="#888" strokeDasharray="2 2" />
-              {show.utility && (
-                <Area
-                  type="monotone"
-                  dataKey="utility"
-                  stroke="#000000"
-                  fill="#DDDDDD"
-                  stackId="1"
-                />
+              {supplyKeys.map(({ key, stroke, fill }) =>
+                show[key] ? (
+                  <Area
+                    key={key}
+                    type="monotone"
+                    dataKey={key}
+                    stroke={stroke}
+                    fill={fill}
+                    stackId="supply"
+                  />
+                ) : null
               )}
-              {show.solar && (
-                <Area
-                  type="monotone"
-                  dataKey="solar"
-                  stroke="#388E3C"
-                  fill="#C8E6C9"
-                  stackId="1"
-                />
-              )}
-              {show.bess && (
-                <Area
-                  type="monotone"
-                  dataKey="bess"
-                  stroke="#1976D2"
-                  fill="#BBDEFB"
-                  stackId="1"
-                />
+              {overlayKeys.map(({ key, stroke, fill }) =>
+                show[key] ? (
+                  <Area
+                    key={key}
+                    type="monotone"
+                    dataKey={key}
+                    stroke={stroke}
+                    fill={fill}
+                    strokeWidth={1}
+                    fillOpacity={0.3}
+                  />
+                ) : null
               )}
               {show.load && (
                 <Line
@@ -225,16 +234,24 @@ export default function PowerChart({ data = defaultData }) {
               label={<Box display="flex" alignItems="center"><Box sx={{ width: 16, height: 2, borderTop: '2px dotted black', mr: 1 }} />Load</Box>}
             />
             <FormControlLabel
-              control={<Checkbox checked={show.utility} onChange={handleLegend('utility')} />}
-              label={<Box display="flex" alignItems="center"><Box sx={{ width: 16, height: 10, backgroundColor: '#DDDDDD', mr: 1 }} />Utility</Box>}
+              control={<Checkbox checked={show.utility_to_load} onChange={handleLegend('utility_to_load')} />}
+              label={<Box display="flex" alignItems="center"><Box sx={{ width: 16, height: 10, backgroundColor: '#DDDDDD', mr: 1 }} />Utility → Load</Box>}
             />
             <FormControlLabel
-              control={<Checkbox checked={show.bess} onChange={handleLegend('bess')} />}
-              label={<Box display="flex" alignItems="center"><Box sx={{ width: 16, height: 10, backgroundColor: '#BBDEFB', mr: 1 }} />BESS</Box>}
+              control={<Checkbox checked={show.bess_to_load} onChange={handleLegend('bess_to_load')} />}
+              label={<Box display="flex" alignItems="center"><Box sx={{ width: 16, height: 10, backgroundColor: '#BBDEFB', mr: 1 }} />BESS → Load</Box>}
             />
             <FormControlLabel
-              control={<Checkbox checked={show.solar} onChange={handleLegend('solar')} />}
-              label={<Box display="flex" alignItems="center"><Box sx={{ width: 16, height: 10, backgroundColor: '#C8E6C9', mr: 1 }} />Solar_PV</Box>}
+              control={<Checkbox checked={show.solar_to_load} onChange={handleLegend('solar_to_load')} />}
+              label={<Box display="flex" alignItems="center"><Box sx={{ width: 16, height: 10, backgroundColor: '#C8E6C9', mr: 1 }} />Solar → Load</Box>}
+            />
+            <FormControlLabel
+              control={<Checkbox checked={show.diesel_to_load} onChange={handleLegend('diesel_to_load')} />}
+              label={<Box display="flex" alignItems="center"><Box sx={{ width: 16, height: 10, backgroundColor: '#FFE0B2', mr: 1 }} />Diesel → Load</Box>}
+            />
+            <FormControlLabel
+              control={<Checkbox checked={show.ng_to_load} onChange={handleLegend('ng_to_load')} />}
+              label={<Box display="flex" alignItems="center"><Box sx={{ width: 16, height: 10, backgroundColor: '#D7CCC8', mr: 1 }} />NG (CHP) → Load</Box>}
             />
             <FormControlLabel
               control={<Checkbox checked={show.missing} onChange={handleLegend('missing')} />}
