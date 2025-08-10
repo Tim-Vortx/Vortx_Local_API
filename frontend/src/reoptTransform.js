@@ -2,38 +2,64 @@ export function reoptToDailySeries(results, dayIndex = 0, tph = 1) {
   if (!results) return [];
   const outputs = results.outputs || {};
 
-  // Core load and generation series
-  const load = outputs?.ElectricLoad?.load_series_kw || [];
+  // Helper to pick the first array among candidate keys, preferring any that have non-zero values.
+  const pick = (obj, keys) => {
+    if (!obj) return [];
+    for (const k of keys) {
+      const arr = obj[k];
+      if (Array.isArray(arr) && arr.some(v => Math.abs(v) > 1e-9)) return arr;
+    }
+    for (const k of keys) {
+      const arr = obj[k];
+      if (Array.isArray(arr)) return arr;
+    }
+    return [];
+  };
 
-  const pv_to_load = outputs?.PV?.electric_to_load_series_kw || [];
-  const pv_to_storage = outputs?.PV?.electric_to_storage_series_kw || [];
-  const pv_to_grid = outputs?.PV?.electric_to_grid_series_kw || [];
+  // Series lookups with multiple possible key names (covers REopt v2/v3 variants & potential future changes)
+  const load = pick(outputs?.ElectricLoad, ["load_series_kw", "electric_load_series_kw"]);
 
-  const es_to_load = outputs?.ElectricStorage?.electric_to_load_series_kw || [];
-  const es_to_grid = outputs?.ElectricStorage?.electric_to_grid_series_kw || [];
+  const pv_to_load    = pick(outputs?.PV, ["electric_to_load_series_kw", "pv_to_load_series_kw"]);
+  const pv_to_storage = pick(outputs?.PV, ["electric_to_storage_series_kw", "pv_to_storage_series_kw", "to_storage_series_kw"]);
+  const pv_to_grid    = pick(outputs?.PV, ["electric_to_grid_series_kw", "electric_export_to_grid_series_kw", "to_grid_series_kw"]);
 
-  const util_to_load = outputs?.ElectricUtility?.electric_to_load_series_kw || [];
-  const util_to_storage =
-    outputs?.ElectricUtility?.electric_to_storage_series_kw ||
-    outputs?.ElectricUtility?.load_to_storage_series_kw ||
-    [];
-  // const util_export = outputs?.ElectricUtility?.export_series_kw || [];
+  const es_to_load = pick(outputs?.ElectricStorage, [
+    "electric_to_load_series_kw",
+    "storage_to_load_series_kw",
+    "discharge_to_load_series_kw",
+    "discharge_series_kw"
+  ]);
+  const es_to_grid = pick(outputs?.ElectricStorage, [
+    "electric_to_grid_series_kw",
+    "storage_to_grid_series_kw",
+    "discharge_to_grid_series_kw",
+    "export_to_grid_series_kw"
+  ]);
+  const es_soc_pct = pick(outputs?.ElectricStorage, [
+    "soc_series_pct",
+    "state_of_charge_series_pct",
+    "soc_pct_series"
+  ]);
 
-  const gen_to_load = outputs?.Generator?.electric_to_load_series_kw || [];
-  const gen_export = outputs?.Generator?.electric_to_grid_series_kw || [];
+  const util_to_load = pick(outputs?.ElectricUtility, ["electric_to_load_series_kw", "grid_to_load_series_kw"]);
+  const util_to_storage = pick(outputs?.ElectricUtility, [
+    "electric_to_storage_series_kw",
+    "grid_to_storage_series_kw",
+    "load_to_storage_series_kw",
+    "from_grid_to_storage_series_kw"
+  ]);
 
-  const chp_to_load = outputs?.CHP?.electric_to_load_series_kw || [];
-  const chp_export = outputs?.CHP?.electric_to_grid_series_kw || [];
+  const gen_to_load  = pick(outputs?.Generator, ["electric_to_load_series_kw", "gen_to_load_series_kw"]);
+  const gen_export   = pick(outputs?.Generator, ["electric_to_grid_series_kw", "gen_to_grid_series_kw"]);
+  const chp_to_load  = pick(outputs?.CHP, ["electric_to_load_series_kw", "chp_to_load_series_kw"]);
+  const chp_export   = pick(outputs?.CHP, ["electric_to_grid_series_kw", "chp_to_grid_series_kw"]);
 
   const year =
     results?.inputs?.Scenario?.analysis_year ||
     results?.inputs?.Financial?.analysis_year ||
     2017;
 
-  // IMPORTANT: Use local midnight for base timestamp rather than UTC so that
-  // solar production aligns with local daytime hours. Previously we used
-  // Date.UTC(...) which shifted timestamps by the local timezone offset and
-  // made solar appear to generate overnight in the chart.
+  // Local midnight base
   const baseTimestamp = new Date(year, 0, 1).getTime();
 
   const stepsPerDay = 24 * tph;
@@ -42,15 +68,11 @@ export function reoptToDailySeries(results, dayIndex = 0, tph = 1) {
 
   for (let i = 0; i < stepsPerDay; i++) {
     const idx = start + i;
-    const ts = baseTimestamp + (idx * 3600 * 1000) / tph; // each step = 1/tph hour
-    // Clamp tiny numerical noise (e.g., 1e-9) to zero to avoid phantom nighttime PV
+    const ts = baseTimestamp + (idx * 3600 * 1000) / tph;
     const clamp = (v) => (Math.abs(v) < 1e-6 ? 0 : v);
     data.push({
       timestamp: ts,
-  // Hour of day in decimal (e.g., for sub-hourly resolution). This allows the
-  // chart to display a consistent 0–24 hour axis independent of the viewer's
-  // local timezone so solar output appears in daylight hours.
-  hour: i / tph,
+      hour: i / tph,
       load: clamp(load[idx] ?? 0),
       utility_to_load: clamp(util_to_load[idx] ?? 0),
       bess_to_load: clamp(es_to_load[idx] ?? 0),
@@ -63,6 +85,7 @@ export function reoptToDailySeries(results, dayIndex = 0, tph = 1) {
       bess_export: clamp(es_to_grid[idx] ?? 0),
       diesel_export: clamp(gen_export[idx] ?? 0),
       ng_export: clamp(chp_export[idx] ?? 0),
+      soc_pct: clamp(es_soc_pct[idx] ?? 0)
     });
   }
 

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from "react";
-import minimalScenario from "./minimalScenario.json";
 import { reoptToDailySeries } from "./reoptTransform";
 import {
   Container,
@@ -28,6 +27,17 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PowerChart from "./PowerChart";
 import LocationInput from "./LocationInput";
+
+// Default constants (previously sourced from minimalScenario.json)
+const DEFAULT_PV_COST_PER_KW = 900; // $/kW fallback
+const DEFAULT_ANNUAL_KWH = 200000; // Used to seed a flat initial load profile
+const DEFAULT_FINANCIAL = {
+  elec_cost_escalation_rate_fraction: 0.03,
+  offtaker_discount_rate_fraction: 0.1,
+  analysis_years: 25,
+  offtaker_tax_rate_fraction: 0.2,
+  om_cost_escalation_rate_fraction: 0.02,
+};
 
 // Normalized 8760-hour load shapes for various facility types
 const BASE_SHAPES = {
@@ -211,9 +221,7 @@ function App() {
   const [location, setLocation] = useState("");
   const [sizingMode, setSizingMode] = useState("optimal");
   const [pvMaxKw, setPvMaxKw] = useState("0");
-  const [pvCost, setPvCost] = useState(
-    String(minimalScenario.PV.installed_cost_per_kw),
-  );
+  const [pvCost, setPvCost] = useState(String(DEFAULT_PV_COST_PER_KW));
   const [storageMaxKw, setStorageMaxKw] = useState("0");
   const [storageMaxKwh, setStorageMaxKwh] = useState("0");
 
@@ -238,7 +246,7 @@ function App() {
   const [schema, setSchema] = useState(null);
 
   const initialLoads = useMemo(
-    () => Array(8760).fill(minimalScenario.ElectricLoad.annual_kwh / 8760),
+    () => Array(8760).fill(DEFAULT_ANNUAL_KWH / 8760),
     [],
   );
   const [loads, setLoads] = useState(initialLoads);
@@ -431,8 +439,8 @@ function App() {
         annual_kwh: summary.total,
       },
       ElectricTariff: { urdb_label: urdbLabel },
-      ElectricUtility: minimalScenario.ElectricUtility,
-      Financial: minimalScenario.Financial,
+      ElectricUtility: {}, // Kept empty unless future UI fields populate it
+      Financial: { ...DEFAULT_FINANCIAL },
       Settings: { off_grid_flag: offGrid },
     };
 
@@ -450,7 +458,7 @@ function App() {
               existing_kw: parseFloat(pvMaxKw),
               max_kw: parseFloat(pvMaxKw),
             }),
-        installed_cost_per_kw: parseFloat(pvCost),
+        installed_cost_per_kw: parseFloat(pvCost || "0"),
         can_export: solarCanExport,
       };
     }

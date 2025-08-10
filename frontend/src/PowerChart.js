@@ -16,7 +16,7 @@ import {
   Tooltip,
   ReferenceLine,
   ResponsiveContainer,
-  // Brush removed (date slider not needed for single-day view)
+  Legend
 } from 'recharts';
 
 // Single-day synthetic default (used only when no real data yet)
@@ -61,7 +61,8 @@ export default function PowerChart({ data = defaultData }) {
     solar_export: true,
     bess_export: true,
     diesel_export: true,
-    ng_export: true,
+  ng_export: true,
+  soc_pct: true,
   });
   // Removed zoom + range logic since we now display a single day at a time
   const handleLegend = (key) => (e) => {
@@ -79,7 +80,7 @@ export default function PowerChart({ data = defaultData }) {
       <Box display="flex" height={300}>
         <Box flexGrow={1}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={filtered} margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
+            <AreaChart data={filtered} margin={{ top: 10, right: 30, bottom: 10, left: 20 }}>
               <CartesianGrid stroke="#eee" verticalLines={true} />
               {hasHour ? (
                 <XAxis
@@ -99,8 +100,17 @@ export default function PowerChart({ data = defaultData }) {
                 />
               )}
               <YAxis
+                yAxisId="power"
                 label={{ value: 'kW', angle: -90, position: 'insideLeft' }}
                 domain={['auto', 'auto']}
+              />
+              <YAxis
+                yAxisId="soc"
+                orientation="right"
+                tickFormatter={(v) => `${v}%`}
+                domain={[0, 100]}
+                label={{ value: 'SOC %', angle: -90, position: 'insideRight' }}
+                hide={!show.soc_pct}
               />
               <Tooltip
                 formatter={(value, name) => [`${Number(value).toFixed(0)} kW`, name]}
@@ -136,12 +146,24 @@ export default function PowerChart({ data = defaultData }) {
               )}
               {show.load && (
                 <Line
+                  yAxisId="power"
                   type="monotone"
                   dataKey="load"
                   stroke="#000"
                   strokeWidth={1.5}
                   strokeDasharray="4 4"
                   dot={false}
+                />
+              )}
+              {show.soc_pct && (
+                <Line
+                  yAxisId="soc"
+                  type="monotone"
+                  dataKey="soc_pct"
+                  stroke="#1565C0"
+                  strokeWidth={2}
+                  dot={false}
+                  name="SOC %"
                 />
               )}
             </AreaChart>
@@ -172,6 +194,10 @@ export default function PowerChart({ data = defaultData }) {
             <FormControlLabel
               control={<Checkbox checked={show.ng_to_load} onChange={handleLegend('ng_to_load')} />}
               label={<Box display="flex" alignItems="center"><Box sx={{ width: 16, height: 10, backgroundColor: '#D7CCC8', mr: 1 }} />NG (CHP) → Load</Box>}
+            />
+            <FormControlLabel
+              control={<Checkbox checked={show.soc_pct} onChange={handleLegend('soc_pct')} />}
+              label={<Box display="flex" alignItems="center"><Box sx={{ width: 12, height: 0, borderTop: '2px solid #1565C0', mr: 1 }} />SOC %</Box>}
             />
           </FormGroup>
         </Box>
