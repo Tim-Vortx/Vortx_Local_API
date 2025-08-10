@@ -268,17 +268,23 @@ def status(run_uuid):
             if resp_status is not None and getattr(resp_status, "status_code", None) == 429:
                 retry_after = int(getattr(resp_status.headers, "get", lambda k, d: d)("Retry-After", "60"))
                 cooldowns[run_uuid] = time.time() + retry_after
-                logging.warning(f"NREL API rate limit hit for run_uuid {run_uuid}, retry after {retry_after}s")
+                logging.warning(
+                    f"NREL API rate limit hit for run_uuid {run_uuid}, retry after {retry_after}s"
+                )
                 time.sleep(retry_after)
                 if time.time() - start_time >= 300:
                     break
                 continue
-            # Explicitly surface 400 Bad Request from NREL to the client
-        if getattr(resp, "status_code", None) == 400:
-            error_detail = getattr(resp, "text", "")
-            logging.error(f"NREL API 400 Bad Request on results for run_uuid {run_uuid}: {error_detail}")
-            # Do not surface a 400 to clients polling status; return a 200 with error details instead
-            return jsonify({"error": "Bad Request from NREL API", "details": error_detail}), 200
+            if resp_status is not None and getattr(resp_status, "status_code", None) == 400:
+                error_detail = getattr(resp_status, "text", "")
+                logging.error(
+                    f"NREL API 400 Bad Request on results for run_uuid {run_uuid}: {error_detail}"
+                )
+                # Do not surface a 400 to clients polling status; return a 200 with error details instead
+                return (
+                    jsonify({"error": "Bad Request from NREL API", "details": error_detail}),
+                    200,
+                )
             logging.error(f"HTTP error from NREL API on results: {e}")
             return jsonify({"error": str(e)}), 502
         except requests.exceptions.RequestException as e:
