@@ -19,6 +19,8 @@ import {
   Tabs,
   Tab,
 } from "@mui/material";
+import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
+import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PowerChart from "./PowerChart";
 
@@ -244,6 +246,9 @@ function App() {
   const [genLoadFactor, setGenLoadFactor] = useState(0.5);
   const [siteType, setSiteType] = useState("industrial");
 
+  const startDate = useMemo(() => new Date(loadYear, 0, 1), [loadYear]);
+  const [selectedDate, setSelectedDate] = useState(startDate);
+
   const [runUuid, setRunUuid] = useState(null);
   const [status, setStatus] = useState("");
   const [outputs, setOutputs] = useState(null);
@@ -266,6 +271,10 @@ function App() {
     };
     loadSchema();
   }, []);
+
+  useEffect(() => {
+    setSelectedDate(startDate);
+  }, [startDate]);
 
   // Polling configuration
   const baseDelay = parseInt(
@@ -955,20 +964,24 @@ function App() {
               </Typography>
               <Box mb={4}>
                 <Typography variant="h6">Daily Operations</Typography>
-                <TextField
-                  type="number"
-                  label="Day (0-364)"
-                  value={dayIndex}
-                  onChange={(e) =>
-                    setDayIndex(
-                      Math.min(
-                        364,
-                        Math.max(0, parseInt(e.target.value || "0", 10)),
-                      ),
-                    )
-                  }
-                  sx={{ mb: 2 }}
-                />
+                <LocalizationProvider dateAdapter={AdapterDateFns}>
+                  <DatePicker
+                    label="Date"
+                    views={["month", "day"]}
+                    format="MM/dd"
+                    value={selectedDate}
+                    onChange={(newValue) => {
+                      if (newValue) {
+                        setSelectedDate(newValue);
+                        const diff = Math.floor(
+                          (newValue - startDate) / (24 * 60 * 60 * 1000),
+                        );
+                        setDayIndex(Math.min(364, Math.max(0, diff)));
+                      }
+                    }}
+                    slotProps={{ textField: { sx: { mb: 2 } } }}
+                  />
+                </LocalizationProvider>
                 <PowerChart data={dailyData} />
               </Box>
               <Paper variant="outlined" sx={{ p: 2 }}>
