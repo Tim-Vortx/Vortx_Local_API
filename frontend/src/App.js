@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import minimalScenario from "./minimalScenario.json";
+import { reoptToDailySeries } from "./reoptTransform";
 import {
   Container,
   Typography,
@@ -19,50 +20,7 @@ import {
   Tab,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import {
-  AreaChart,
-  Area,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  CartesianGrid,
-  ResponsiveContainer,
-} from "recharts";
 import PowerChart from "./PowerChart";
-
-// colors for the chart series
-const COLORS = [
-  "#8884d8",
-  "#82ca9d",
-  "#ff7300",
-  "#d0ed57",
-  "#a4de6c",
-  "#0088fe",
-  "#ff0000",
-];
-
-// Mapping of timeseries keys to human-readable labels for the chart
-const SERIES_MAP = {
-  ElectricLoad_load_series_kw: "Site Load",
-  ElectricUtility_electric_to_load_series_kw: "Utility Purchase",
-  ElectricUtility_export_series_kw: "Utility Export",
-  PV_electric_to_load_series_kw: "Solar Serves Load",
-  PV_electric_to_storage_series_kw: "Solar Charges BESS",
-  PV_electric_to_grid_series_kw: "Solar Export",
-  ElectricStorage_electric_to_load_series_kw: "BESS Serves Load",
-  ElectricStorage_electric_to_grid_series_kw: "BESS Export",
-  Generator_electric_to_load_series_kw: "NG Generator Serves Load",
-  Generator_electric_to_storage_series_kw: "NG Generator Charges BESS",
-  Generator_electric_to_grid_series_kw: "NG Generator Export",
-  NGGenerator_electric_to_load_series_kw: "NG Generator Serves Load",
-  NGGenerator_electric_to_storage_series_kw: "NG Generator Charges BESS",
-  NGGenerator_electric_to_grid_series_kw: "NG Generator Export",
-  DieselGenerator_electric_to_load_series_kw: "Diesel Generator Serves Load",
-  DieselGenerator_electric_to_storage_series_kw:
-    "Diesel Generator Charges BESS",
-};
 
 // Normalized 8760-hour load shapes for various facility types
 const BASE_SHAPES = {
@@ -184,38 +142,6 @@ function RenderOutputs({ data }) {
   );
 }
 
-// Find all timeseries arrays (length 8760) within the outputs
-function extractTimeSeries(outputs) {
-  const series = [];
-  const walk = (obj, prefix = "") => {
-    if (!obj || typeof obj !== "object") return;
-    Object.entries(obj).forEach(([k, v]) => {
-      const path = prefix ? `${prefix}.${k}` : k;
-      if (
-        Array.isArray(v) &&
-        (v.length === 8760 || v.length === 35040) &&
-        v.every((n) => typeof n === "number")
-      ) {
-        // If 35040 samples (15-min resolution), convert to hourly by averaging every 4 samples
-        const hourly =
-          v.length === 35040
-            ? Array.from({ length: 8760 }, (_, idx) => {
-                const base = idx * 4;
-                return (
-                  (v[base] + v[base + 1] + v[base + 2] + v[base + 3]) / 4
-                );
-              })
-            : v;
-        series.push({ key: path.replace(/\./g, "_"), label: path, values: hourly });
-      } else if (v && typeof v === "object") {
-        walk(v, path);
-      }
-    });
-  };
-  walk(outputs);
-  return series;
-}
-
 // Parse an uploaded CSV containing hourly (8760) or 15-min (35040)
 // kW load values. Optionally the first column may contain timestamps
 // from which a year will be extracted.
@@ -321,8 +247,11 @@ function App() {
   const [runUuid, setRunUuid] = useState(null);
   const [status, setStatus] = useState("");
   const [outputs, setOutputs] = useState(null);
+  const [results, setResults] = useState(null);
+  const [dailyData, setDailyData] = useState([]);
+  const [dayIndex, setDayIndex] = useState(0);
+  const [tph, setTph] = useState(1);
   const [error, setError] = useState("");
-  const [day, setDay] = useState(0); // day of year for chart
   const [tab, setTab] = useState(0); // 0: Inputs, 1: Results
 
   useEffect(() => {
@@ -640,65 +569,29 @@ function App() {
     return () => clearTimeout(timeoutId);
   }, [runUuid, baseDelay, maxWait]);
 
-  // Extract timeseries from outputs when available
-  const timeSeries = useMemo(() => {
-    if (!outputs) return [];
-    const base = extractTimeSeries(outputs)
-      .filter((ts) => SERIES_MAP[ts.key])
-      .map((ts) => {
-        let label = SERIES_MAP[ts.key];
-        if (
-          ts.key.startsWith("Generator_") &&
-          generatorFuelType === "diesel"
-        ) {
-          label = label.replace("NG Generator", "Diesel Generator");
-        }
-        return { ...ts, label };
-      });
-    if (
-      base.some(
-        (ts) => ts.key === "ElectricUtility_electric_to_load_series_kw",
-      )
-    ) {
-      const len = base[0]?.values.length || 0;
-      base.push({
-        key: "ElectricUtility_export_series_kw",
-        label: SERIES_MAP["ElectricUtility_export_series_kw"],
-        values: Array(len).fill(0),
-      });
-    }
-    return base;
-  }, [outputs, generatorFuelType]);
+  // Fetch detailed results and build daily chart data
+  useEffect(() => {
+    if (!runUuid || !outputs) return;
+    const fetchResults = async () => {
+      try {
+        const res = await fetch(`/results/${encodeURIComponent(runUuid)}`);
+        const data = await res.json();
+        setResults(data);
+        const steps = data?.outputs?.Settings?.time_steps_per_hour || 1;
+        setTph(steps);
+        setDailyData(reoptToDailySeries(data, dayIndex, steps));
+      } catch (e) {
+        console.error("Results fetch failed", e);
+      }
+    };
+    fetchResults();
+  }, [runUuid, outputs]);
 
-  // Chart data for selected day
-  const chartData = useMemo(() => {
-    if (!timeSeries.length) return [];
-    const start = day * 24;
-    return Array.from({ length: 24 }, (_, hour) => {
-      const idx = start + hour;
-      const point = { hour };
-      timeSeries.forEach((ts) => {
-        point[ts.key] = ts.values[idx];
-      });
-      const load = point["ElectricLoad_load_series_kw"] || 0;
-      let served = 0;
-      Object.keys(point).forEach((k) => {
-        if (
-          k.endsWith("_electric_to_load_series_kw") &&
-          k !== "ElectricUtility_electric_to_load_series_kw"
-        ) {
-          served += point[k];
-        }
-      });
-      const utility = load - served;
-      point["ElectricUtility_electric_to_load_series_kw"] = Math.max(
-        utility,
-        0,
-      );
-      point["ElectricUtility_export_series_kw"] = Math.min(utility, 0);
-      return point;
-    });
-  }, [timeSeries, day]);
+  useEffect(() => {
+    if (!results) return;
+    setDailyData(reoptToDailySeries(results, dayIndex, tph));
+  }, [results, dayIndex, tph]);
+
   return (
     <Container sx={{ py: 4 }}>
       <Typography variant="h4" gutterBottom>
@@ -1061,66 +954,22 @@ function App() {
                 Outputs
               </Typography>
               <Box mb={4}>
-                <PowerChart />
-              </Box>
-              <Box mb={4}>
                 <Typography variant="h6">Daily Operations</Typography>
-                {timeSeries.length > 0 ? (
-                  <>
-                    <TextField
-                      type="number"
-                      label="Day (0-364)"
-                      value={day}
-                      onChange={(e) =>
-                        setDay(
-                          Math.min(
-                            364,
-                            Math.max(0, parseInt(e.target.value || "0", 10)),
-                          ),
-                        )
-                      }
-                      sx={{ mb: 2 }}
-                    />
-                    <ResponsiveContainer width="100%" height={300}>
-                      <AreaChart
-                        data={chartData}
-                        margin={{ top: 5, right: 20, bottom: 5, left: 0 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="hour" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        {timeSeries
-                          .filter((ts) => ts.key !== "ElectricLoad_load_series_kw")
-                          .map((ts, i) => (
-                            <Area
-                              type="monotone"
-                              key={ts.key}
-                              dataKey={ts.key}
-                              name={ts.label}
-                              stroke={COLORS[(i + 1) % COLORS.length]}
-                              fill={COLORS[(i + 1) % COLORS.length]}
-                              stackId={
-                                ts.key === "ElectricUtility_export_series_kw"
-                                  ? "2"
-                                  : "1"
-                              }
-                            />
-                          ))}
-                        <Line
-                          type="monotone"
-                          dataKey="ElectricLoad_load_series_kw"
-                          name="Site Load"
-                          stroke={COLORS[0]}
-                          dot={false}
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </>
-                ) : (
-                  <Typography>No timeseries data available.</Typography>
-                )}
+                <TextField
+                  type="number"
+                  label="Day (0-364)"
+                  value={dayIndex}
+                  onChange={(e) =>
+                    setDayIndex(
+                      Math.min(
+                        364,
+                        Math.max(0, parseInt(e.target.value || "0", 10)),
+                      ),
+                    )
+                  }
+                  sx={{ mb: 2 }}
+                />
+                <PowerChart data={dailyData} />
               </Box>
               <Paper variant="outlined" sx={{ p: 2 }}>
                 <RenderOutputs data={outputs} />

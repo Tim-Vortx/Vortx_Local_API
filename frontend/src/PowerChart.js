@@ -27,26 +27,35 @@ import {
   Brush,
 } from 'recharts';
 
-const supplyKeys = [
-  { key: 'utility_to_load', stroke: '#000000', fill: '#DDDDDD' },
-  { key: 'solar_to_load', stroke: '#388E3C', fill: '#C8E6C9' },
-  { key: 'bess_to_load', stroke: '#1976D2', fill: '#BBDEFB' },
-  { key: 'diesel_to_load', stroke: '#F57C00', fill: '#FFE0B2' },
-  { key: 'ng_to_load', stroke: '#8D6E63', fill: '#D7CCC8' },
+// generate hourly data from Aug 5 to Aug 8, 2025
+const start = new Date('2025-08-05T00:00:00').getTime();
+const hours = 24 * 4;
+const defaultData = Array.from({ length: hours }, (_, i) => {
+  const t = new Date(start + i * 3600 * 1000);
+  const h = t.getHours();
+  const load = 600 + 600 * Math.max(0, Math.sin(((h - 6) / 24) * Math.PI * 2));
+  const solar = h >= 6 && h <= 18 ? -800 * Math.sin(((h - 6) / 12) * Math.PI) : 0;
+  const bess =
+    h >= 0 && h <= 5 ? 200 : h >= 12 && h <= 15 ? -200 : 0;
+  const utility = load + bess + solar;
+  return { timestamp: t.getTime(), load, solar, bess, utility };
+});
+
+// weather mini-chart data
+const defaultWeatherData = defaultData.map((d, idx) => {
+  const ghi = 500 + 200 * Math.sin((idx / hours) * Math.PI * 2);
+  const temp = 25 + 10 * Math.sin((idx / hours) * Math.PI * 4 + 1);
+  const wind = 5 + 2 * Math.sin((idx / hours) * Math.PI * 8 + 2);
+  return { timestamp: d.timestamp, ghi, temp, wind };
+});
+
+const defaultEvents = [
+  { date: new Date('2025-08-06T12:00:00').getTime(), color: '#EF5350', count: 1 },
+  { date: new Date('2025-08-07T12:00:00').getTime(), color: '#FFCC80', count: 1 },
+  { date: new Date('2025-08-08T12:00:00').getTime(), color: '#FFCC80', count: 1 },
 ];
 
-const overlayKeys = [
-  { key: 'solar_to_bess', stroke: '#388E3C', fill: '#C8E6C9' },
-  { key: 'utility_to_bess', stroke: '#000000', fill: '#DDDDDD' },
-  { key: 'solar_export', stroke: '#388E3C', fill: '#C8E6C9' },
-  { key: 'bess_export', stroke: '#1976D2', fill: '#BBDEFB' },
-  { key: 'diesel_export', stroke: '#F57C00', fill: '#FFE0B2' },
-  { key: 'ng_export', stroke: '#8D6E63', fill: '#D7CCC8' },
-];
-
-const events = [];
-
-export default function PowerChart({ data = [] }) {
+export default function PowerChart({ data = defaultData }) {
   const [show, setShow] = useState({
     load: true,
     utility_to_load: true,
@@ -65,31 +74,25 @@ export default function PowerChart({ data = [] }) {
   });
   const [range, setRange] = useState({
     startIndex: 0,
-    endIndex: Math.max(0, data.length - 1),
+    endIndex: data.length - 1,
   });
 
-  useEffect(() => {
-    setRange({ startIndex: 0, endIndex: Math.max(0, data.length - 1) });
-  }, [data]);
 
   const handleLegend = (key) => (e) => {
     setShow({ ...show, [key]: e.target.checked });
   };
 
   const resetZoom = () => {
-    setRange({ startIndex: 0, endIndex: Math.max(0, data.length - 1) });
+
+    setRange({ startIndex: 0, endIndex: data.length - 1 });
   };
 
   const filtered = data.slice(range.startIndex, range.endIndex + 1);
+  const startTime = filtered[0]?.timestamp || 0;
+  const endTime = filtered[filtered.length - 1]?.timestamp || 0;
+  const weatherData = data === defaultData ? defaultWeatherData : [];
+  const events = data === defaultData ? defaultEvents : [];
 
-  const startTime = data[range.startIndex]?.timestamp || 0;
-  const endTime = data[range.endIndex]?.timestamp || 0;
-  const ticks =
-    startTime && endTime
-      ? Array.from({ length: 4 }, (_, i) => startTime + (i * (endTime - startTime)) / 3)
-      : [];
-
-  const weatherData = data;
 
   return (
     <Box sx={{ width: '100%', height: 400 }}>
@@ -130,14 +133,7 @@ export default function PowerChart({ data = [] }) {
                 dataKey="timestamp"
                 type="number"
                 domain={[startTime, endTime]}
-                tickFormatter={(t) =>
-                  new Date(t).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })
-                }
-                ticks={ticks}
+                tickFormatter={(t) => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               />
               <YAxis
                 label={{ value: 'kW', angle: -90, position: 'insideLeft' }}
