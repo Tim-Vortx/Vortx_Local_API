@@ -55,6 +55,28 @@ const defaultEvents = [
   { date: new Date('2025-08-08T12:00:00').getTime(), color: '#FFCC80', count: 1 },
 ];
 
+// Define the data keys used for stacked supply and overlay areas. Each key maps to
+// a stroke and fill color so the chart can dynamically render whichever series are
+// toggled on via the legend checkboxes.
+const supplyKeys = [
+  { key: 'utility_to_load', stroke: '#DDDDDD', fill: '#DDDDDD' },
+  { key: 'bess_to_load', stroke: '#BBDEFB', fill: '#BBDEFB' },
+  { key: 'solar_to_load', stroke: '#C8E6C9', fill: '#C8E6C9' },
+  { key: 'diesel_to_load', stroke: '#FFE0B2', fill: '#FFE0B2' },
+  { key: 'ng_to_load', stroke: '#D7CCC8', fill: '#D7CCC8' },
+];
+
+const overlayKeys = [
+  { key: 'solar_to_bess', stroke: '#C8E6C9', fill: '#C8E6C9' },
+  { key: 'utility_to_bess', stroke: '#DDDDDD', fill: '#DDDDDD' },
+  { key: 'solar_export', stroke: '#C8E6C9', fill: '#C8E6C9' },
+  { key: 'bess_export', stroke: '#BBDEFB', fill: '#BBDEFB' },
+  { key: 'diesel_export', stroke: '#FFE0B2', fill: '#FFE0B2' },
+  { key: 'ng_export', stroke: '#D7CCC8', fill: '#D7CCC8' },
+  { key: 'missing', stroke: '#FFCC80', fill: '#FFCC80' },
+  { key: 'alarms', stroke: '#EF5350', fill: '#EF5350' },
+];
+
 export default function PowerChart({ data = defaultData }) {
   const [show, setShow] = useState({
     load: true,
