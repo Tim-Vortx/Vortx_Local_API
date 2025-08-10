@@ -48,8 +48,6 @@ export function reoptToDailySeries(results, dayIndex = 0, tph = 1) {
       bess_export: es_to_grid[idx] ?? 0,
       diesel_export: gen_export[idx] ?? 0,
       ng_export: chp_export[idx] ?? 0,
-      missing: 0,
-      alarms: 0,
     });
   }
 
