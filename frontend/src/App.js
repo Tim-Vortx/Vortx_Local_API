@@ -793,27 +793,29 @@ function App() {
               />
             </CardContent>
           </Card>
-          <Card>
-            <CardContent
-              sx={{ display: "flex", flexDirection: "column", gap: 2 }}
-            >
-              <Typography variant="h6">Utility Inputs</Typography>
-              <TextField
-                label="Energy Rate ($/kWh)"
-                type="number"
-                fullWidth
-                value={energyRate}
-                onChange={(e) => setEnergyRate(e.target.value)}
-              />
-              <TextField
-                label="Demand Rate ($/kW)"
-                type="number"
-                fullWidth
-                value={demandRate}
-                onChange={(e) => setDemandRate(e.target.value)}
-              />
-            </CardContent>
-          </Card>
+          {!urdbLabel && (
+            <Card>
+              <CardContent
+                sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+              >
+                <Typography variant="h6">Utility Inputs</Typography>
+                <TextField
+                  label="Energy Rate ($/kWh)"
+                  type="number"
+                  fullWidth
+                  value={energyRate}
+                  onChange={(e) => setEnergyRate(e.target.value)}
+                />
+                <TextField
+                  label="Demand Rate ($/kW)"
+                  type="number"
+                  fullWidth
+                  value={demandRate}
+                  onChange={(e) => setDemandRate(e.target.value)}
+                />
+              </CardContent>
+            </Card>
+          )}
           <Card>
             <CardContent
               sx={{ display: "flex", flexDirection: "column", gap: 2 }}
