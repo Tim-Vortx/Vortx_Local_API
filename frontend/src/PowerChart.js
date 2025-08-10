@@ -1,18 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
-  Select,
-  MenuItem,
   IconButton,
-  Button,
   FormGroup,
   FormControlLabel,
   Checkbox,
 } from '@mui/material';
 import ShareIcon from '@mui/icons-material/Share';
-import DownloadIcon from '@mui/icons-material/Download';
-import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import {
   AreaChart,
   Area,
@@ -118,16 +113,8 @@ export default function PowerChart({ data = defaultData }) {
 
   return (
     <Box sx={{ width: '100%', height: 400 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-        <Box display="flex" alignItems="center" gap={1}>
-          <Typography variant="subtitle1">Power</Typography>
-        </Box>
-        <Box display="flex" alignItems="center" gap={1}>
-          <Select size="small" value={7}>
-            <MenuItem value={7}>Last 7 Days</MenuItem>
-          </Select>
-          <IconButton size="small"><ShareIcon fontSize="small" /></IconButton>
-        </Box>
+      <Box display="flex" alignItems="center" mb={1}>
+        <Typography variant="subtitle1">Power</Typography>
         <Box flexGrow={1} mx={2}>
           <ResponsiveContainer width="100%" height={40}>
             <LineChart data={weatherData} margin={{ top: 5, bottom: 5 }}>
@@ -140,10 +127,7 @@ export default function PowerChart({ data = defaultData }) {
             </LineChart>
           </ResponsiveContainer>
         </Box>
-        <Box display="flex" alignItems="center" gap={1}>
-          <Button endIcon={<ArrowDropDownIcon />}>Total: 16.63 MWh</Button>
-          <Button variant="outlined" startIcon={<DownloadIcon />}>Download</Button>
-        </Box>
+        <IconButton size="small"><ShareIcon fontSize="small" /></IconButton>
       </Box>
 
       <Box display="flex" height={300}>
@@ -243,9 +227,13 @@ export default function PowerChart({ data = defaultData }) {
           </Box>
           {range.startIndex !== 0 || range.endIndex !== data.length - 1 ? (
             <Box textAlign="right">
-              <Button size="small" onClick={resetZoom} sx={{ mt: 1 }}>
+              <Typography
+                variant="button"
+                onClick={resetZoom}
+                sx={{ mt: 1, cursor: 'pointer' }}
+              >
                 Cancel Zoom
-              </Button>
+              </Typography>
             </Box>
           ) : null}
         </Box>
