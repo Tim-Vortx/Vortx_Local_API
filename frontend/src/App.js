@@ -589,6 +589,13 @@ function App() {
           setStatus("Error");
           return;
         }
+        if (data.error) {
+          setError(
+            data.details ? `${data.error}: ${data.details}` : data.error,
+          );
+          setStatus("Error");
+          return;
+        }
         const s = data?.status || data?.data?.status || "";
         setStatus(s);
 
