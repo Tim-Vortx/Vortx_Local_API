@@ -281,6 +281,7 @@ def status(run_uuid):
                 {
                     "error": "Polling too frequently. Please retry later.",
                     "retry_after": retry_after,
+                    "rate_limit_hit": True,
                 }
             ),
             429,
@@ -305,6 +306,7 @@ def status(run_uuid):
     data = None
     status_val = None
     # Poll for up to 5 minutes at 10-second intervals
+    rate_limit_hit = False
     while True:
         try:
             resp = requests.get(results_url, headers=headers, timeout=DEFAULT_TIMEOUT)
@@ -316,6 +318,7 @@ def status(run_uuid):
                     retry_after = int(resp.headers.get("Retry-After", "60"))
                     cooldowns[run_uuid] = time.time() + retry_after
                     logging.warning(f"NREL API rate limit hit for run_uuid {run_uuid}, retry after {retry_after}s")
+                    rate_limit_hit = True
                     # Sleep for retry_after seconds before retrying
                     time.sleep(retry_after)
                     if time.time() - start_time >= 300:
@@ -395,7 +398,19 @@ def status(run_uuid):
             logging.error(f"NREL API indicated completion but no outputs were returned for run_uuid {run_uuid}")
             return jsonify({"error": "Outputs missing from NREL response", "status": status_val}), 502
         data["outputs"] = outputs
+        # Save full NREL output to logs/results_<run_uuid>.json
+        results_dir = os.path.join(os.path.dirname(__file__), "logs")
+        os.makedirs(results_dir, exist_ok=True)
+        results_path = os.path.join(results_dir, f"results_{run_uuid}.json")
+        try:
+            with open(results_path, "w") as f:
+                json.dump(data, f, indent=2)
+        except OSError as e:
+            logging.warning("Failed to write NREL results file %s: %s", results_path, e)
 
+    # Attach rate limit info to response
+    if isinstance(data, dict):
+        data["rate_limit_hit"] = rate_limit_hit
     return jsonify(data)
 
 

@@ -292,16 +292,17 @@ function App() {
     setLoads(arr);
   };
 
-  const fetchTariffs = async () => {
+  const fetchTariffs = async (loc) => {
     setError("");
     setTariffs([]);
-    if (!location.trim()) {
+    const locationToUse = loc !== undefined ? loc : location;
+    if (!locationToUse.trim()) {
       setError("Location is required to fetch tariffs");
       return;
     }
     try {
       const geoRes = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(location)}`,
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(locationToUse)}`,
       );
       const geoData = await geoRes.json();
       if (!geoData.length) {

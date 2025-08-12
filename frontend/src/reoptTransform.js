@@ -108,13 +108,34 @@ export function transformReoptOutputs(results) {
   const scenarios = {};
 
   for (const [name, o] of scenarioEntries) {
+    // Debug: log raw scenario object and financial mapping
+    console.log("[transformReoptOutputs] Scenario:", name, o);
+    const fin = o.Financial || o;
     const financial = {
-      upfront_cost: o.initial_capital_cost ?? o.total_installed_cost ?? null,
-      net_savings: o.net_capital_cost ?? o.net_savings_us_dollars ?? null,
-      npv: o.npv_us_dollars ?? o.npv ?? null,
-      payback: o.payback_years ?? null,
-      lcc: o.lcc ?? o.lifecycle_cost_us_dollars ?? null,
+      upfront_cost:
+        fin.capital_costs_after_non_discounted_incentives ??
+        fin.capital_costs_after_non_discounted_incentives_without_macrs ??
+        fin.initial_capital_cost ??
+        fin.total_installed_cost ??
+        null,
+      net_savings:
+        fin.developer_annual_free_cashflows?.[0] ??
+        fin.net_capital_cost ??
+        fin.net_savings_us_dollars ??
+        null,
+      npv:
+        fin.npv_us_dollars ??
+        fin.npv ??
+        null,
+      payback:
+        fin.payback_years ??
+        null,
+      lcc:
+        fin.lcc ??
+        fin.lifecycle_cost_us_dollars ??
+        null,
     };
+    console.log("[transformReoptOutputs] Financial:", financial);
 
     const performance = (o.utility_bill_savings_by_year || []).map(
       (v, idx) => ({
