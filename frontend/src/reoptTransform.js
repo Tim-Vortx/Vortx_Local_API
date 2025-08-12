@@ -51,6 +51,11 @@ export function reoptToDailySeries(results, dayIndex = 0, tph = 1) {
 
   const gen_to_load  = pick(outputs?.Generator, ["electric_to_load_series_kw", "gen_to_load_series_kw"]);
   const gen_export   = pick(outputs?.Generator, ["electric_to_grid_series_kw", "gen_to_grid_series_kw"]);
+  const gen_to_storage = pick(outputs?.Generator, [
+    "electric_to_storage_series_kw",
+    "gen_to_storage_series_kw",
+    "to_storage_series_kw"
+  ]);
   const chp_to_load  = pick(outputs?.CHP, ["electric_to_load_series_kw", "chp_to_load_series_kw"]);
   const chp_export   = pick(outputs?.CHP, ["electric_to_grid_series_kw", "chp_to_grid_series_kw"]);
 
@@ -85,6 +90,7 @@ export function reoptToDailySeries(results, dayIndex = 0, tph = 1) {
       bess_export: clamp(es_to_grid[idx] ?? 0),
       diesel_export: clamp(gen_export[idx] ?? 0),
       ng_export: clamp(chp_export[idx] ?? 0),
+  gen_to_bess: clamp(gen_to_storage[idx] ?? 0),
       soc_pct: clamp(es_soc_pct[idx] ?? 0)
     });
   }
@@ -111,6 +117,12 @@ export function transformReoptOutputs(results) {
     // Debug: log raw scenario object and financial mapping
     console.log("[transformReoptOutputs] Scenario:", name, o);
     const fin = o.Financial || o;
+    // First-year savings defined as sum of available year-1 savings components.
+    const firstYearUtility = (o.utility_bill_savings_by_year || [])[0] || 0;
+    const firstYearDemand = (o.demand_charge_savings_by_year || [])[0] || 0;
+    const firstYearCapacity = (o.export_benefit_by_year || [])[0] || 0;
+    const firstYearSavings = firstYearUtility + firstYearDemand + firstYearCapacity;
+
     const financial = {
       upfront_cost:
         fin.capital_costs_after_non_discounted_incentives ??
@@ -118,11 +130,8 @@ export function transformReoptOutputs(results) {
         fin.initial_capital_cost ??
         fin.total_installed_cost ??
         null,
-      net_savings:
-        fin.developer_annual_free_cashflows?.[0] ??
-        fin.net_capital_cost ??
-        fin.net_savings_us_dollars ??
-        null,
+      // Map net_savings to first-year savings per user request.
+      net_savings: firstYearSavings || null,
       npv:
         fin.npv_us_dollars ??
         fin.npv ??

@@ -25,7 +25,8 @@ logging.basicConfig(
 cooldowns = {}
 
 API_URL = "https://developer.nrel.gov/api/reopt/stable/"
-NREL_API_KEY = os.getenv("NREL_API_KEY")
+NREL_API_KEY = os.getenv("NREL_API_KEY")  # REopt API key
+OPEN_EI_API_KEY = os.getenv("OPEN_EI_API_KEY", NREL_API_KEY)  # Allow separate key for OpenEI Utility Rates
 
 def _extract_support_id(body: str) -> str | None:
     match = re.search(r"support ID is: (\\d+)", body, re.IGNORECASE)
@@ -249,9 +250,54 @@ def urdb():
     except Exception as e:
         logging.error(f"URDB lookup failed for {lat},{lon}: {e}")
         return jsonify({"error": "URDB lookup failed"}), 502
-    items = data.get("items", [])
-    tariffs = [{"label": i.get("label"), "name": i.get("name")} for i in items]
-    return jsonify(tariffs)
+    # Return full tariff item objects so the frontend can display detailed rate / TOU structures.
+    # (Payload size is modest for typical item counts.)
+    return jsonify(data.get("items", []))
+
+
+@app.route("/urdb/<label>", methods=["GET"])
+def urdb_detail(label):
+    """Fetch a single URDB tariff by label (bypasses cache for full detail)."""
+    if not OPEN_EI_API_KEY:
+        logging.warning("OPEN_EI_API_KEY not set; attempting detail fetch without key (may return limited fields)")
+    # Basic in-memory throttle: if same label requested >5 times in 10s window, short-circuit
+    window_seconds = 10
+    now = time.time()
+    hits = app.config.setdefault('_URDB_DETAIL_HITS', {})
+    # prune old
+    for k, arr in list(hits.items()):
+        hits[k] = [t for t in arr if now - t < window_seconds]
+        if not hits[k]:
+            hits.pop(k, None)
+    arr = hits.setdefault(label, [])
+    arr.append(now)
+    if len(arr) > 5:
+        logging.warning(f"Throttling excessive /urdb/{label} requests: {len(arr)} in {window_seconds}s")
+        return jsonify({"error": "Too many requests for this label"}), 429
+    # The OpenEI API supports getpage=<label> to retrieve a specific tariff page
+    url = (
+        "https://api.openei.org/utility_rates"
+        f"?version=8&format=json&detail=full&getpage={label}" + (f"&api_key={OPEN_EI_API_KEY}" if OPEN_EI_API_KEY else "")
+    )
+    try:
+        resp = requests.get(url, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+    except requests.exceptions.RequestException as e:
+        logging.error(f"URDB single tariff fetch failed for {label}: {e}")
+        return jsonify({"error": "URDB single tariff fetch failed"}), 502
+    items = data.get("items") or []
+    # Log presence of structures for debugging
+    if isinstance(items, list) and items:
+        first = items[0]
+        logging.info("/urdb/%s detail keys: %s", label, list(first.keys())[:25])
+        logging.info("Rate structure present? energy=%s demand=%s", 'energyratestructure' in first, 'demandratestructure' in first)
+    # items can sometimes be a dict for single responses; normalize to first item
+    if isinstance(items, dict):
+        return jsonify(items)
+    if items:
+        return jsonify(items[0])
+    return jsonify({"error": "Tariff not found"}), 404
 
 
 @app.route("/schema", methods=["GET"])
