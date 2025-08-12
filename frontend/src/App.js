@@ -22,7 +22,7 @@ import {
 } from "@mui/material";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
-import PowerChart from "./PowerChart";
+import PowerGraph from "./PowerGraph";
 import LocationInput from "./LocationInput";
 import SummaryCards from "./SummaryCards";
 import EconomicsTable from "./EconomicsTable";
@@ -197,6 +197,18 @@ function App() {
   const [outputs, setOutputs] = useState(null);
   const [results, setResults] = useState(null);
   const [dailyData, setDailyData] = useState([]);
+  const graphData = useMemo(
+    () =>
+      dailyData.map((d) => ({
+        timestamp: d.timestamp,
+        load: d.load,
+        utility: d.utility_to_load,
+        solar: d.solar_to_load,
+        bess: d.bess_to_load,
+        genset: (d.diesel_to_load || 0) + (d.ng_to_load || 0),
+      })),
+    [dailyData],
+  );
   const [structured, setStructured] = useState(null);
   const [scenario, setScenario] = useState("");
   const [dayIndex, setDayIndex] = useState("0");
@@ -1031,7 +1043,7 @@ function App() {
               slotProps={{ textField: { sx: { mb: 2 } } }}
             />
           </LocalizationProvider>
-          <PowerChart data={dailyData} />
+          <PowerGraph data={graphData} />
         </Box>
       )}
     </Box>
