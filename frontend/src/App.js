@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { reoptToDailySeries } from "./reoptTransform";
+import { reoptToDailySeries, transformReoptOutputs } from "./reoptTransform";
 import {
   Container,
   Typography,
   TextField,
   Button,
   Box,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Paper,
   FormControlLabel,
   Checkbox,
   MenuItem,
@@ -21,12 +17,19 @@ import {
   FormLabel,
   RadioGroup,
   Radio,
+  Select,
+  InputLabel,
 } from "@mui/material";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PowerChart from "./PowerChart";
 import LocationInput from "./LocationInput";
+import SummaryCards from "./SummaryCards";
+import EconomicsTable from "./EconomicsTable";
+import PerformanceTable from "./PerformanceTable";
+import ResiliencePanel from "./ResiliencePanel";
+import EmissionsPanel from "./EmissionsPanel";
+import PaymentScheduleTable from "./PaymentScheduleTable";
 
 // Default constants (previously sourced from minimalScenario.json)
 const DEFAULT_PV_COST_PER_KW = 900; // $/kW fallback
@@ -80,83 +83,6 @@ const BASE_SHAPES = {
 function normalizeShape(arr) {
   const max = Math.max(...arr);
   return arr.map((v) => v / max);
-}
-
-function ArrayRenderer({ arr }) {
-  const [expanded, setExpanded] = useState(false);
-  const allPrimitive = arr.every(
-    (item) => item === null || typeof item !== "object",
-  );
-
-  if (!expanded) {
-    const text =
-      arr.length > 50
-        ? JSON.stringify(arr.slice(0, 50)) + " …" + ` (${arr.length} items)`
-        : JSON.stringify(arr);
-    return (
-      <Box>
-        <Typography sx={{ whiteSpace: "pre-wrap" }}>{text}</Typography>
-        {arr.length > 50 && (
-          <Button size="small" onClick={() => setExpanded(true)}>
-            Show all
-          </Button>
-        )}
-      </Box>
-    );
-  }
-
-  return (
-    <Box>
-      {allPrimitive ? (
-        <Typography sx={{ whiteSpace: "pre-wrap" }}>
-          {JSON.stringify(arr)}
-        </Typography>
-      ) : (
-        arr.map((item, idx) => (
-          <Accordion key={idx} disableGutters>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography>{idx}</Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <RenderOutputs data={item} />
-            </AccordionDetails>
-          </Accordion>
-        ))
-      )}
-      {arr.length > 50 && (
-        <Button size="small" onClick={() => setExpanded(false)}>
-          Show less
-        </Button>
-      )}
-    </Box>
-  );
-}
-
-/** Recursively render the outputs object using MUI accordions */
-function RenderOutputs({ data }) {
-  if (data === null || data === undefined) return null;
-
-  if (typeof data !== "object" || Array.isArray(data)) {
-    if (Array.isArray(data)) {
-      return <ArrayRenderer arr={data} />;
-    }
-    return <Typography>{String(data)}</Typography>;
-  }
-
-  return (
-    <Box>
-      {Object.entries(data).map(([key, value]) => (
-        <Accordion key={key} disableGutters>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>{key}</Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <RenderOutputs data={value} />
-          </AccordionDetails>
-        </Accordion>
-      ))}
-    </Box>
-  );
 }
 
 // Parse an uploaded CSV containing hourly (8760) or 15-min (35040)
@@ -271,6 +197,8 @@ function App() {
   const [outputs, setOutputs] = useState(null);
   const [results, setResults] = useState(null);
   const [dailyData, setDailyData] = useState([]);
+  const [structured, setStructured] = useState(null);
+  const [scenario, setScenario] = useState("");
   const [dayIndex, setDayIndex] = useState("0");
   const [tph, setTph] = useState(1);
   const [error, setError] = useState("");
@@ -622,6 +550,10 @@ function App() {
         const res = await fetch(`/results/${encodeURIComponent(runUuid)}`);
         const data = await res.json();
         setResults(data);
+        const structuredData = transformReoptOutputs(data);
+        setStructured(structuredData);
+        const names = Object.keys(structuredData.scenarios || {});
+        setScenario((s) => s || names[0] || "");
         const steps = data?.outputs?.Settings?.time_steps_per_hour || 1;
         setTph(steps);
         setDailyData(
@@ -1035,41 +967,35 @@ function App() {
     </Box>
   );
 
-  const financialOutputsPanel = !outputs ? (
+  const scenarioOptions = Object.keys(structured?.scenarios || {});
+  const currentScenario = structured?.scenarios?.[scenario] || null;
+  const financialOutputsPanel = !currentScenario ? (
     <Typography>No financial results available.</Typography>
   ) : (
-    <Card>
-      <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <Typography variant="h6">Financial Outputs</Typography>
-        {outputs.npv_us_dollars !== undefined && (
-          <Typography>
-            Net Present Value: $
-            {outputs.npv_us_dollars.toLocaleString(undefined, {
-              maximumFractionDigits: 2,
-            })}
-          </Typography>
-        )}
-        {outputs && (
-          <Box mt={4}>
-            <Typography variant="h5" gutterBottom>
-              Outputs
-            </Typography>
-            <Paper variant="outlined" sx={{ p: 2 }}>
-              <RenderOutputs data={outputs} />
-            </Paper>
-          </Box>
-        )}
-        {outputs.payback_years !== undefined && (
-          <Typography>Payback Period: {outputs.payback_years} years</Typography>
-        )}
-        {outputs.lcc !== undefined && (
-          <Typography>
-            Life Cycle Cost: $
-            {outputs.lcc.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-          </Typography>
-        )}
-      </CardContent>
-    </Card>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      {scenarioOptions.length > 1 && (
+        <FormControl size="small" sx={{ maxWidth: 200 }}>
+          <InputLabel>Scenario</InputLabel>
+          <Select
+            value={scenario}
+            label="Scenario"
+            onChange={(e) => setScenario(e.target.value)}
+          >
+            {scenarioOptions.map((s) => (
+              <MenuItem key={s} value={s}>
+                {s}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
+      <SummaryCards data={currentScenario.financial} />
+      <EconomicsTable data={currentScenario.financial} />
+      <PerformanceTable data={currentScenario.performance} />
+      <ResiliencePanel data={currentScenario.resilience} />
+      <EmissionsPanel data={currentScenario.emissions} />
+      <PaymentScheduleTable data={currentScenario.payments} />
+    </Box>
   );
 
   const performancePanel = (

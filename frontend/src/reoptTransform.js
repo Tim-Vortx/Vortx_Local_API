@@ -92,3 +92,67 @@ export function reoptToDailySeries(results, dayIndex = 0, tph = 1) {
   return data;
 }
 
+/**
+ * Transform raw REopt `results.outputs` into structured objects used by the UI.
+ * The REopt API field names can vary between versions so this helper attempts to
+ * pick the most common keys while being tolerant of missing data. All values
+ * come directly from live REopt API responses.
+ */
+export function transformReoptOutputs(results) {
+  const out = results?.outputs || {};
+  const rawScenarios = out.scenarios || out.Scenarios;
+  const scenarioEntries = rawScenarios
+    ? Object.entries(rawScenarios)
+    : [["default", out]];
+
+  const scenarios = {};
+
+  for (const [name, o] of scenarioEntries) {
+    const financial = {
+      upfront_cost: o.initial_capital_cost ?? o.total_installed_cost ?? null,
+      net_savings: o.net_capital_cost ?? o.net_savings_us_dollars ?? null,
+      npv: o.npv_us_dollars ?? o.npv ?? null,
+      payback: o.payback_years ?? null,
+      lcc: o.lcc ?? o.lifecycle_cost_us_dollars ?? null,
+    };
+
+    const performance = (o.utility_bill_savings_by_year || []).map(
+      (v, idx) => ({
+        year: idx + 1,
+        utility_savings: v,
+        demand_savings: o.demand_charge_savings_by_year?.[idx] ?? null,
+        capacity_savings: o.export_benefit_by_year?.[idx] ?? null,
+      }),
+    );
+
+    const resilience = {
+      outage_duration_hours: o.resilience_hours ?? o.outage_duration ?? null,
+      percent_load_served:
+        o.probability_ensuring_power_to_critical_load ??
+        o.percent_load_served ??
+        null,
+    };
+
+    const emissions = {
+      baseline_co2e_tons:
+        o.emissions_cone_co2_baseline_tons ??
+        o.co2_emissions_baseline_tons ??
+        null,
+      post_co2e_tons:
+        o.emissions_cone_co2_tons ??
+        o.co2_emissions_tons ??
+        null,
+    };
+
+    const payments = (o.developer_annual_cashflow || []).map((v, idx) => ({
+      year: idx + 1,
+      amount: v,
+    }));
+
+    scenarios[name] = { financial, performance, resilience, emissions, payments };
+  }
+
+  return { scenarios };
+}
+
+

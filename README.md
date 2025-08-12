@@ -4,7 +4,12 @@ This repository contains a minimal example of connecting to NREL's REopt v3 API.
 It includes:
 
 - **Flask backend** for submitting REopt scenarios and polling results.
-- **React frontend** for editing a scenario and viewing outputs.
+- **React frontend** for editing a scenario and viewing outputs. All charts and
+  tables are populated from live REopt API responses rather than static
+  placeholder data.
+- **Modular React components** (economics, performance, resilience, emissions
+  and payment schedule panels, plus dispatch charts) for visualizing the REopt
+  results.
 
 ## Quick Start
 
