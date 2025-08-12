@@ -206,12 +206,10 @@ def submit():
     except requests.exceptions.Timeout as e:
         logging.error(f"NREL API request timed out on submit: {e}")
         return jsonify({"error": "NREL API request timed out"}), 504
-    except requests.exceptions.ConnectTimeout as e:
-        logging.error(f"NREL API connect timed out on submit: {e}")
-        return jsonify({"error": "NREL API connect timed out"}), 504
     except requests.exceptions.HTTPError as e:
-        if getattr(resp, "status_code", None) == 400:
-            error_detail = resp.text
+        resp_obj = getattr(e, 'response', None)
+        if resp_obj is not None and getattr(resp_obj, "status_code", None) == 400:
+            error_detail = getattr(resp_obj, "text", str(e))
             logging.error(f"NREL API 400 Bad Request on submit: {error_detail}")
             return jsonify({"error": "Bad Request from NREL API", "details": error_detail}), 400
         logging.error(f"HTTP error from NREL API on submit: {e}")
@@ -234,7 +232,7 @@ def submit():
         with open(run_uuid_path, "w") as f:
             json.dump(scenario, f, indent=2)
     except OSError as e:
-        logging.warning("Failed to write scenario log file %s: %s", run_uuid_path, e)
+        logging.warning("Failed to write scenario log file %s: %s", f"scenario_{run_uuid}.json", e)
 
     return jsonify({"run_uuid": run_uuid})
 
@@ -350,9 +348,6 @@ def status(run_uuid):
         except requests.exceptions.Timeout as e:
             logging.error(f"NREL API request timed out on results: {e}")
             return jsonify({"error": "NREL API request timed out"}), 504
-        except requests.exceptions.ConnectTimeout as e:
-            logging.error(f"NREL API connect timed out on results: {e}")
-            return jsonify({"error": "NREL API connect timed out"}), 504
         except requests.exceptions.HTTPError as e:
             # Handle rate-limit and bad request errors here if available in the exception
             resp_status = getattr(e, "response", None)
@@ -417,4 +412,4 @@ def results_route(run_uuid):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5001, debug=True)
