@@ -13,7 +13,8 @@ import json
 
 from urdb_cache import fetch_tariffs
 
-load_dotenv()
+dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path=dotenv_path, override=True)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -139,6 +140,11 @@ def submit():
                 400,
             )
 
+        # Ensure ElectricTariff block includes the selected tariff
+        if "selected_tariff" in scenario:
+            selected_tariff = scenario.pop("selected_tariff")
+            scenario["ElectricTariff"] = {"urdb_label": selected_tariff.get("label")}
+
         # Translate natural gas generators to CHP objects
         for key in list(scenario.keys()):
             if not key.lower().startswith("generator"):
@@ -148,6 +154,9 @@ def submit():
                 continue
             fuel = gen.get("fuel_type", "").lower()
             if fuel in {"natural_gas", "natural gas", "ng"}:
+                # Skip CHP conversion for off-grid scenarios
+                if scenario.get("Settings", {}).get("off_grid_flag", False):
+                    continue
                 chp = gen.copy()
                 if "fuel_cost_per_mmbtu" not in chp and "fuel_cost_per_gal" in chp:
                     chp["fuel_cost_per_mmbtu"] = chp.pop("fuel_cost_per_gal")
@@ -470,6 +479,101 @@ def status(run_uuid):
 @app.route("/results/<run_uuid>", methods=["GET"])
 def results_route(run_uuid):
     return status(run_uuid)
+
+
+# Helper to fetch OpenEI Utility Rates (version 3) for a given location
+def _fetch_util_rates(lat: float, lon: float, api_key: str | None = None) -> dict:
+    url = (
+        "https://api.openei.org/utility_rates"
+        f"?version=3&lat={lat}&lon={lon}"
+    )
+    if api_key:
+        url += f"&api_key={api_key}"
+    resp = requests.get(url, timeout=DEFAULT_TIMEOUT)
+    resp.raise_for_status()
+    return resp.json()
+
+
+@app.route("/api/tariffs", methods=["GET"])
+def api_tariffs():
+    """Return normalized tariffs for a given location (lat, lon).
+    Example: /api/tariffs?lat=34.05&lon=-118.25
+    """
+    lat = request.args.get("lat", type=float)
+    lon = request.args.get("lon", type=float)
+    if lat is None or lon is None:
+        return jsonify({"error": "lat and lon required"}), 400
+    try:
+        # Use the cached URDB fetch (version=8) to get the same items returned
+        # by the /urdb endpoint; the v3 util_rates endpoint can return a
+        # different set which caused some entries to be missing from the
+        # /api/tariffs listing.
+        data = fetch_tariffs(lat, lon, api_key=OPEN_EI_API_KEY)
+        items = data.get("items", []) if isinstance(data, dict) else []
+        tariffs = []
+        for it in items:
+            # Preserve a few raw OpenEI fields so the frontend can apply
+            # richer filters (service_type, sectors, approved) without
+            # re-querying OpenEI.
+            tariffs.append({
+                "id": str(it.get("label") or it.get("id") or ""),
+                "label": it.get("label"),
+                "name": it.get("name") or it.get("label") or "",
+                "utility_name": it.get("utility_name") or it.get("utility") or "",
+                "rate_type": it.get("rate_type") or it.get("ratestructure") or "",
+                "service_type": it.get("service_type") or it.get("service") or None,
+                "sectors": it.get("sectors") or it.get("sector") or None,
+                "approved": it.get("approved") if "approved" in it else None,
+                "is_approved": it.get("is_approved") if "is_approved" in it else None,
+                "effective_from": it.get("effective_from") or it.get("from"),
+                "effective_to": it.get("effective_to") or it.get("to"),
+                "is_current": it.get("is_current", False),
+                "monthly_fixed_charge": it.get("monthly_fixed_charge") or it.get("monthly_charge") or it.get("monthly_fee") or 0,
+                "ratestructure": it.get("ratestructure", []),
+                "energy_rates": it.get("energy_rates", []),
+                "demand_rates": it.get("demand_rates", []),
+                "notes": it.get("notes", ""),
+                # Include the raw item for edge-case inspection in the UI/dev console
+                "raw": it,
+            })
+        # Deduplicate by utility + name: prefer approved/current records and the most recent startdate/revision
+        deduped = {}
+        def score_item(x):
+            # Returns tuple for comparison: higher is better
+            approved = bool(x.get('approved') is True or x.get('is_approved') is True or x.get('is_current'))
+            is_current = bool(x.get('is_current'))
+            raw = x.get('raw') or {}
+            start = 0
+            try:
+                start = int(raw.get('startdate') or raw.get('start') or 0)
+            except Exception:
+                start = 0
+            revs = raw.get('revisions') or []
+            maxrev = 0
+            try:
+                if isinstance(revs, list) and revs:
+                    maxrev = max(int(r) for r in revs if isinstance(r, int) or (isinstance(r, str) and r.isdigit()))
+            except Exception:
+                maxrev = 0
+            return (1 if approved else 0, 1 if is_current else 0, int(start), int(maxrev))
+
+        for t in tariffs:
+            key = (t.get('utility_name') or '').strip().lower() + '||' + (t.get('name') or '').strip().lower()
+            if not key.strip('||'):
+                # fallback to id if no name/utility
+                key = 'id||' + (t.get('id') or '')
+            existing = deduped.get(key)
+            if not existing:
+                deduped[key] = t
+                continue
+            if score_item(t) > score_item(existing):
+                deduped[key] = t
+
+        tariffs = list(deduped.values())
+        return jsonify({"tariffs": tariffs})
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Tariffs fetch failed for {lat},{lon}: {e}")
+        return jsonify({"error": "Tariffs fetch failed"}), 502
 
 
 if __name__ == "__main__":

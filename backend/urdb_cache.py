@@ -64,6 +64,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
     result = fetch_tariffs(args.lat, args.lon, api_key=args.api_key)
     pprint([
-        {"label": item.get("label"), "name": item.get("name")}
+        {"label": item.get("label"), "name": item.get("name"),
+         "ratestructure": item.get("ratestructure", []),
+         "energy_rates": item.get("energy_rates", []),
+         "demand_rates": item.get("demand_rates", [])}
         for item in result.get("items", [])
     ])

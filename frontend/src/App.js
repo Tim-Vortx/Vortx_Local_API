@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import TariffSelector from "./TariffModule";
 import { reoptToDailySeries, transformReoptOutputs } from "./reoptTransform";
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper } from '@mui/material';
 import {
@@ -168,6 +169,7 @@ function App() {
   const [genCanExport, setGenCanExport] = useState(false);
   const [genChargeBess, setGenChargeBess] = useState(false);
   const [tariffs, setTariffs] = useState([]);
+  const [tariffLocation, setTariffLocation] = useState(null); // {lat, lon} for TariffSelector
   const [urdbLabel, setUrdbLabel] = useState("");
   const [showAllTariffs, setShowAllTariffs] = useState(false);
   const [offGrid, setOffGrid] = useState(false);
@@ -309,6 +311,7 @@ function App() {
   const fetchTariffs = async (loc) => {
     setError("");
     setTariffs([]);
+    setTariffLocation(null);
     const locationToUse = loc !== undefined ? loc : location;
     if (!locationToUse.trim()) {
       setError("Location is required to fetch tariffs");
@@ -325,6 +328,8 @@ function App() {
       }
       const lat = parseFloat(geoData[0].lat);
       const lon = parseFloat(geoData[0].lon);
+      // Save the geocoded lat/lon for the TariffSelector component
+      setTariffLocation({ lat, lon });
       const res = await fetch(`/urdb?lat=${lat}&lon=${lon}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -620,31 +625,19 @@ function App() {
               setLocation(val);
               setUrdbLabel("");
               setTariffs([]);
+              setTariffLocation(null);
             }}
             onFindTariffs={(val) => fetchTariffs(val)}
           />
-          {/* Tariff filtering toggle */}
-          {tariffs.length > 0 && (
-            <FormControlLabel
-              control={<Checkbox checked={showAllTariffs} onChange={e=>setShowAllTariffs(e.target.checked)} />}
-              label="Show all tariffs (include residential & others)"
-            />
-          )}
-          {tariffs.length > 0 && (
-            <Typography variant="caption" sx={{ mt: -1 }}>
-              Showing {showAllTariffs ? 'all' : 'top 20 non-residential'} (filtered from {tariffs.length})
-            </Typography>
-          )}
-          {tariffs.length > 0 && (
-            <TariffSelect
-              tariffs={tariffs}
-              showAll={showAllTariffs}
-              value={urdbLabel}
-              onChange={setUrdbLabel}
-            />
-          )}
-          {urdbLabel && (
-            <TariffDetails tariff={tariffs.find(t => t.label === urdbLabel)} />
+          {tariffLocation && (
+            <TariffSelector 
+  apiKey="YOUR_API_KEY" 
+  location={tariffLocation} 
+  onTariffSelect={(label) => {
+    setUrdbLabel(label);
+    console.log('Selected URDB Label:', label);
+  }} 
+/>
           )}
         </CardContent>
       </Card>
@@ -1075,6 +1068,8 @@ function App() {
     </Box>
   );
 
+  console.log('Current URDB Label before rendering button:', urdbLabel);
+
   return (
     <Container sx={{ py: 4 }}>
       <Typography variant="h4" gutterBottom>
@@ -1095,525 +1090,3 @@ function App() {
 }
 
 export default App;
-
-// Tariff dropdown with filtering logic
-function TariffSelect({ tariffs, showAll, value, onChange }) {
-  const filtered = React.useMemo(() => {
-    if (showAll) return tariffs;
-    // Exclude residential sector
-    const nonRes = tariffs.filter(t => !/residential/i.test(t.sector || ''));
-    // Heuristic ranking
-    const ranked = nonRes.map(t => {
-      const energyPeriods = Array.isArray(t.energyratestructure) ? t.energyratestructure.length : 0;
-      const demandPeriods = Array.isArray(t.demandratestructure) ? t.demandratestructure.length : 0;
-      const sector = (t.sector || '').toLowerCase();
-      let score = 0;
-      if (/industrial|large/.test(sector)) score += 6;
-      else if (/commercial|general/.test(sector)) score += 5;
-      else if (/municipal|government/.test(sector)) score += 3;
-      if (demandPeriods) score += 3;
-      if (energyPeriods > 1) score += 1;
-      // Recency: later startdate (epoch) => small bonus scaled
-      if (t.startdate) score += (t.startdate / 1e9); // keep modest influence
-      return { t, score };
-    }).sort((a,b)=> b.score - a.score);
-    const top = ranked.slice(0,20).map(r => r.t);
-    return top;
-  }, [tariffs, showAll]);
-
-  // Ensure selected value appears even if not in filtered list
-  const displayList = React.useMemo(() => {
-    if (!value) return filtered;
-    if (filtered.some(t => t.label === value)) return filtered;
-    const found = tariffs.find(t => t.label === value);
-    return found ? [found, ...filtered] : filtered;
-  }, [filtered, value, tariffs]);
-
-  return (
-    <TextField
-      select
-      label="Electric Tariff"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      fullWidth
-    >
-      {displayList.map(t => (
-        <MenuItem key={t.label} value={t.label}>
-          {t.name || t.label}
-        </MenuItem>
-      ))}
-    </TextField>
-  );
-}
-
-// Tariff details with tiered Time-of-Use breakdown
-function TariffDetails({ tariff }) {
-  const [detail, setDetail] = React.useState(tariff);
-  const attemptedRef = React.useRef(false);
-  React.useEffect(() => {
-    setDetail(tariff);
-    attemptedRef.current = false; // reset attempt if user selects new tariff
-  }, [tariff]);
-  React.useEffect(() => {
-    if (!detail) return;
-    const hasStructures = Array.isArray(detail.energyratestructure) || Array.isArray(detail.demandratestructure);
-    if (hasStructures) return; // already have what we need
-    if (attemptedRef.current) return; // avoid refetch loop if API does not provide structures
-    attemptedRef.current = true;
-    // Fetch full detail if missing structures
-    const controller = new AbortController();
-    fetch(`/urdb/${encodeURIComponent(detail.label)}`, { signal: controller.signal })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (d && !d.error) {
-          // Only update if new object actually has structures; else keep original to prevent re-render loop
-            if (Array.isArray(d.energyratestructure) || Array.isArray(d.demandratestructure)) {
-              setDetail(d);
-            }
-        }
-      })
-      .catch(() => {});
-    return () => controller.abort();
-  }, [detail]);
-  if (!detail) return null;
-  const tariffObj = detail;
-  const energyPeriods = Array.isArray(tariffObj.energyratestructure) ? [...tariffObj.energyratestructure] : [];
-  const demandPeriods = Array.isArray(tariffObj.demandratestructure) ? [...tariffObj.demandratestructure] : [];
-  const energySeasonMap = tariffObj.energyweekdayschedule || tariffObj.energyweekendschedule ? true : false;
-  const demandSeasonMap = tariffObj.demandweekdayschedule || tariffObj.demandweekendschedule ? true : false;
-
-  const getFirstRate = (periods) => {
-    if (!Array.isArray(periods)) return null;
-    for (const p of periods) {
-      if (Array.isArray(p)) {
-        for (const b of p) {
-          if (b && b.rate != null) return b.rate;
-        }
-      } else if (p && p.rate != null) {
-        return p.rate;
-      }
-    }
-    return null;
-  };
-  const energyRate = getFirstRate(energyPeriods);
-  const demandRate = getFirstRate(demandPeriods);
-
-  const buildTierRows = (periods, isDemand=false) => {
-    const rows = [];
-    periods.forEach((period, pIdx) => {
-      if (!Array.isArray(period)) {
-        // Some APIs may return object for single period; skip if not list
-        return;
-      }
-      period.forEach((block, bIdx) => {
-        // A tier may itself be an array of component objects (generation, delivery, etc.)
-        let components = [];
-        if (Array.isArray(block)) {
-          components = block.filter(c => c && typeof c === 'object');
-        } else if (block && typeof block === 'object') {
-          components = [block];
-        }
-        if (!components.length) return;
-        // classify components
-        let gen = 0, del = 0, other = 0, maxVal = null;
-        components.forEach(c => {
-          const r = (c.rate != null ? c.rate : 0) + (c.adj != null ? c.adj : 0);
-          if (c.max != null) {
-            // Use the smallest non-null max to represent tier cap
-            maxVal = maxVal == null ? c.max : Math.min(maxVal, c.max);
-          }
-          const name = (c.name || '').toLowerCase();
-          if (/gen(eration)?/.test(name)) gen += r;
-          else if (/(deliv|dist|trans|wires)/.test(name)) del += r;
-          else other += r;
-        });
-        const total = gen + del + other;
-        rows.push({
-          period: pIdx + 1,
-            tier: bIdx + 1,
-            rate: total,
-            gen: gen || null,
-            delivery: del || null,
-            other: other || null,
-            max: maxVal,
-            units: isDemand ? '$/kW' : '$/kWh'
-        });
-      });
-    });
-    return rows;
-  };
-  // Fallback: if no periods but flat fields exist
-  if (!energyPeriods.length && Array.isArray(tariffObj.flatenergyratestructure)) {
-    energyPeriods.push(tariffObj.flatenergyratestructure);
-  }
-  if (!demandPeriods.length && Array.isArray(tariffObj.flatdemandratestructure)) {
-    demandPeriods.push(tariffObj.flatdemandratestructure);
-  }
-  const energyTiers = buildTierRows(energyPeriods, false);
-  const demandTiers = buildTierRows(demandPeriods, true);
-
-  // Derive first-tier generation/delivery breakdown if available
-  let firstGen=null, firstDel=null, firstTotal=energyRate;
-  if (energyTiers.length) {
-    const ft = energyTiers[0];
-    firstTotal = ft.rate;
-    if (ft.gen != null) firstGen = ft.gen;
-    if (ft.delivery != null) firstDel = ft.delivery;
-  }
-
-  // ---- TOU Schedule Interpretation ----
-  // URDB schedules: energyweekdayschedule[month][hour] => period index (1-based) or 0
-  function buildHourMap(schedule) {
-    const map = {};
-    if (!Array.isArray(schedule) || !schedule.length) return map;
-    schedule.forEach(monthArr => {
-      if (!Array.isArray(monthArr) || monthArr.length !== 24) return;
-      monthArr.forEach((p, hr) => {
-        if (p == null) return;
-        const period = p; // keep as-is (often 1+)
-        if (period === 0) return; // 0 sometimes means no TOU assignment
-        map[period] = map[period] || new Set();
-        map[period].add(hr);
-      });
-    });
-    // Convert sets to sorted arrays
-    Object.keys(map).forEach(k => {
-      map[k] = Array.from(map[k]).sort((a,b)=>a-b);
-    });
-    return map;
-  }
-  function hoursToRanges(hours) {
-    if (!hours || !hours.length) return '';
-    const ranges=[]; let start=hours[0]; let prev=hours[0];
-    for (let i=1;i<=hours.length;i++) {
-      const h=hours[i];
-      if (h!==prev+1) {
-        ranges.push(start===prev? `${start}`: `${start}-${prev+1}`); // treat end as exclusive hour
-        start=h; prev=h;
-      } else {
-        prev=h;
-      }
-    }
-    return ranges.join(', ');
-  }
-  const weekdayHourMap = buildHourMap(tariffObj.energyweekdayschedule);
-  const weekendHourMap = buildHourMap(tariffObj.energyweekendschedule);
-  // First-tier rate per period (total) using first occurrence of that period in energyTiers
-  const periodRates = {};
-  energyTiers.forEach(t => {
-    if (periodRates[t.period] == null) periodRates[t.period] = t.rate;
-  });
-  const periodEntries = Object.keys({ ...weekdayHourMap, ...weekendHourMap })
-    .map(p => ({
-      period: parseInt(p,10),
-      weekdayHours: hoursToRanges(weekdayHourMap[p]),
-      weekendHours: hoursToRanges(weekendHourMap[p]),
-      rate: periodRates[p] != null ? periodRates[p] : null,
-    }))
-    .sort((a,b)=>a.period-b.period);
-  // Classification: Peak (highest rate), Off-Peak (lowest), others Mid-Peak
-  if (periodEntries.length >= 2) {
-    const sortedByRate = periodEntries.filter(e=>e.rate!=null).slice().sort((a,b)=>b.rate-a.rate);
-    if (sortedByRate.length) sortedByRate[0].classification = 'Peak';
-    if (sortedByRate.length>1) sortedByRate[sortedByRate.length-1].classification = 'Off-Peak';
-    sortedByRate.forEach(e=>{ if (!e.classification) e.classification = 'Mid-Peak'; });
-  }
-
-  // Build seasons: group contiguous months where classification hour maps match
-  function monthClassificationSignature(monthIdx) {
-    // Build per-classification hours for this month (weekday/weekend)
-    const weekday = Array.isArray(tariffObj.energyweekdayschedule) && tariffObj.energyweekdayschedule[monthIdx] || [];
-    const weekend = Array.isArray(tariffObj.energyweekendschedule) && tariffObj.energyweekendschedule[monthIdx] || [];
-    const map = {}; // classification -> {wd:Set, we:Set}
-    function addHours(arr, isWeekend) {
-      if (!Array.isArray(arr) || arr.length!==24) return;
-      arr.forEach((p,h)=>{
-        if (!p) return; // skip 0
-        const entry = periodEntries.find(e=>e.period===p);
-        if (!entry) return;
-        const cls = entry.classification || 'Period';
-        map[cls] = map[cls] || {wd:new Set(), we:new Set()};
-        (isWeekend? map[cls].we : map[cls].wd).add(h);
-      });
-    }
-    addHours(weekday,false);
-    addHours(weekend,true);
-    // Serialize deterministic signature
-    const sigObj = Object.keys(map).sort().reduce((acc,k)=>{
-      const wd = Array.from(map[k].wd).sort((a,b)=>a-b);
-      const we = Array.from(map[k].we).sort((a,b)=>a-b);
-      acc[k] = {wd, we};
-      return acc;
-    },{});
-    return { signature: JSON.stringify(sigObj), detail: sigObj };
-  }
-  const months = Array.from({length:12},(_,i)=>i);
-  const monthSigs = months.map(m=>monthClassificationSignature(m));
-  const seasons = [];
-  let current = null;
-  months.forEach(m=>{
-    const {signature, detail} = monthSigs[m];
-    if (!current || current.signature!==signature) {
-      current = { start:m, end:m, signature, detail };
-      seasons.push(current);
-    } else {
-      current.end = m;
-    }
-  });
-  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  function rangesFromHourArray(arr){ return hoursToRanges(arr); }
-
-  // Build period -> classification and rate maps for heatmap
-  const periodClassMap = {}; const periodRateMap = {};
-  periodEntries.forEach(p=>{ periodClassMap[p.period]=p.classification; periodRateMap[p.period]=p.rate; });
-  function buildScheduleMatrix(schedule) {
-    if (!Array.isArray(schedule)) return [];
-    return schedule.map((monthArr, mIdx) => {
-      if (!Array.isArray(monthArr) || monthArr.length !== 24) return Array(24).fill(null);
-      return monthArr.map((p,h) => {
-        if (!p) return null; // 0 or null = no period
-        return {
-          period: p,
-          classification: periodClassMap[p] || 'Period',
-          rate: periodRateMap[p] || null,
-          hour: h,
-          month: mIdx,
-        };
-      });
-    });
-  }
-  const weekdayMatrix = buildScheduleMatrix(tariffObj.energyweekdayschedule);
-  const weekendMatrix = buildScheduleMatrix(tariffObj.energyweekendschedule);
-  const hasHeatmap = weekdayMatrix.length === 12 && weekdayMatrix.some(r=>Array.isArray(r));
-  const classColors = {
-    'Peak': '#d73027',
-    'Mid-Peak': '#fee08b',
-    'Off-Peak': '#1a9850',
-    'Period': '#cccccc'
-  };
-  const textColorFor = (bg) => {
-    if (!bg) return '#000';
-    // simple luminance check
-    const c = bg.substring(1);
-    const r = parseInt(c.substr(0,2),16), g=parseInt(c.substr(2,2),16), b=parseInt(c.substr(4,2),16);
-    const lum = 0.299*r+0.587*g+0.114*b;
-    return lum < 140 ? '#fff' : '#000';
-  };
-
-  return (
-  <TableContainer component={Paper} variant="outlined" sx={{ maxWidth: 640 }}>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell colSpan={2} sx={{ fontWeight: 600 }}>Tariff Details</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 500 }}>Label</TableCell>
-      <TableCell>{tariffObj.label}</TableCell>
-          </TableRow>
-      {tariffObj.utility && (
-            <TableRow>
-              <TableCell sx={{ fontWeight: 500 }}>Utility</TableCell>
-        <TableCell>{tariffObj.utility}</TableCell>
-            </TableRow>
-          )}
-          {hasHeatmap && (
-            <TableRow>
-              <TableCell colSpan={2} sx={{ p:0 }}>
-                <Box sx={{ mt:2 }}>
-                  <Typography variant="subtitle2" sx={{ mb:1 }}>TOU Heatmap (Weekday)</Typography>
-                  <Box sx={{ display:'grid', gridTemplateColumns:`80px repeat(24, 1fr)`, rowGap:0.5, columnGap:0.5, fontSize:'0.65rem' }}>
-                    <Box></Box>
-                    {Array.from({length:24},(_,h)=>(<Box key={h} sx={{ textAlign:'center' }}>{h}</Box>))}
-                    {weekdayMatrix.map((row,m)=>(
-                      <React.Fragment key={m}>
-                        <Box sx={{ fontWeight:600, textAlign:'right', pr:0.5 }}>{MONTH_NAMES[m]}</Box>
-                        {row.map((cell,h)=>(
-                          <Box key={h} title={cell? `${MONTH_NAMES[m]} h${h}: ${cell.classification}${cell.rate!=null?` ${cell.rate.toFixed(4)} $/kWh`:''}`: 'No TOU'}
-                            sx={{
-                              height:20,
-                              lineHeight:'20px',
-                              textAlign:'center',
-                              border:'1px solid #eee',
-                              backgroundColor: cell? classColors[cell.classification] : '#f5f5f5',
-                              color: cell? textColorFor(classColors[cell.classification]) : '#999',
-                              overflow:'hidden',
-                              whiteSpace:'nowrap'
-                            }}>
-                            {cell && cell.rate!=null ? cell.rate.toFixed(2) : ''}
-                          </Box>
-                        ))}
-                      </React.Fragment>
-                    ))}
-                  </Box>
-                  {weekendMatrix.length === 12 && (
-                    <>
-                      <Typography variant="subtitle2" sx={{ mt:2, mb:1 }}>TOU Heatmap (Weekend)</Typography>
-                      <Box sx={{ display:'grid', gridTemplateColumns:`80px repeat(24, 1fr)`, rowGap:0.5, columnGap:0.5, fontSize:'0.65rem' }}>
-                        <Box></Box>
-                        {Array.from({length:24},(_,h)=>(<Box key={h} sx={{ textAlign:'center' }}>{h}</Box>))}
-                        {weekendMatrix.map((row,m)=>(
-                          <React.Fragment key={m}>
-                            <Box sx={{ fontWeight:600, textAlign:'right', pr:0.5 }}>{MONTH_NAMES[m]}</Box>
-                            {row.map((cell,h)=>(
-                              <Box key={h} title={cell? `${MONTH_NAMES[m]} (WE) h${h}: ${cell.classification}${cell.rate!=null?` ${cell.rate.toFixed(4)} $/kWh`:''}`: 'No TOU'}
-                                sx={{
-                                  height:20,
-                                  lineHeight:'20px',
-                                  textAlign:'center',
-                                  border:'1px solid #eee',
-                                  backgroundColor: cell? classColors[cell.classification] : '#f5f5f5',
-                                  color: cell? textColorFor(classColors[cell.classification]) : '#999',
-                                  overflow:'hidden',
-                                  whiteSpace:'nowrap'
-                                }}>
-                                {cell && cell.rate!=null ? cell.rate.toFixed(2) : ''}
-                              </Box>
-                            ))}
-                          </React.Fragment>
-                        ))}
-                      </Box>
-                    </>
-                  )}
-                  <Box sx={{ display:'flex', gap:2, mt:1, fontSize:'0.7rem' }}>
-                    {Object.entries(classColors).map(([k,v])=>(
-                      <Box key={k} sx={{ display:'flex', alignItems:'center', gap:0.5 }}>
-                        <Box sx={{ width:14, height:14, backgroundColor:v, border:'1px solid #999' }} /> {k}
-                      </Box>
-                    ))}
-                  </Box>
-                </Box>
-              </TableCell>
-            </TableRow>
-          )}
-      {tariffObj.sector && (
-            <TableRow>
-              <TableCell sx={{ fontWeight: 500 }}>Sector</TableCell>
-        <TableCell>{tariffObj.sector}</TableCell>
-            </TableRow>
-          )}
-          <TableRow>
-            <TableCell sx={{ fontWeight: 500 }}>Energy Rate (1st Tier)</TableCell>
-            <TableCell>
-              {firstTotal != null ? `${firstTotal.toFixed(4)} $/kWh` : '—'}
-              {firstGen != null || firstDel != null ? (
-                <span style={{ color:'#555', marginLeft:8 }}>
-                  {firstGen != null && `Gen ${firstGen.toFixed(4)}`} {firstDel != null && `Del ${firstDel.toFixed(4)}`}
-                </span>
-              ) : null}
-            </TableCell>
-          </TableRow>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 500 }}>Demand Rate (1st Tier)</TableCell>
-              <TableCell>{demandRate != null ? `${demandRate.toFixed(2)} $/kW` : '—'}</TableCell>
-            </TableRow>
-          {energyTiers.length > 0 && (
-            <TableRow>
-              <TableCell colSpan={2} sx={{ p: 0 }}>
-                <Table size="small" sx={{ '& td, & th': { border: 0 } }}>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 600 }}>Energy TOU Period</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Tier</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Up To (kWh)</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Generation ($/kWh)</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Delivery ($/kWh)</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Other ($/kWh)</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Total ($/kWh)</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {energyTiers.map(r => (
-                      <TableRow key={`e-${r.period}-${r.tier}`}>
-                        <TableCell>{r.period}</TableCell>
-                        <TableCell>{r.tier}</TableCell>
-                        <TableCell>{r.max != null ? r.max : '—'}</TableCell>
-                        <TableCell>{r.gen != null ? r.gen.toFixed(4) : '—'}</TableCell>
-                        <TableCell>{r.delivery != null ? r.delivery.toFixed(4) : '—'}</TableCell>
-                        <TableCell>{r.other != null ? r.other.toFixed(4) : (r.gen==null && r.delivery==null ? '—' : '0.0000')}</TableCell>
-                        <TableCell>{r.rate.toFixed(4)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableCell>
-            </TableRow>
-          )}
-          {seasons.length > 0 && (
-            <TableRow>
-              <TableCell colSpan={2} sx={{ p:0 }}>
-                <Table size="small" sx={{ '& td, & th': { border:0 }, mt:1 }}>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight:600 }}>Season (Months)</TableCell>
-                      <TableCell sx={{ fontWeight:600 }}>Classification</TableCell>
-                      <TableCell sx={{ fontWeight:600 }}>Weekday Hours</TableCell>
-                      <TableCell sx={{ fontWeight:600 }}>Weekend Hours</TableCell>
-                      <TableCell sx={{ fontWeight:600 }}>First-Tier Rate ($/kWh)</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {seasons.map((s, idx) => {
-                      // For each classification within season detail
-                      const classKeys = Object.keys(s.detail).sort((a,b)=> a.localeCompare(b));
-                      return classKeys.map((cls, i2) => {
-                        const wd = s.detail[cls].wd; const we = s.detail[cls].we;
-                        // Find representative period entry rate: choose first period whose classification matches
-                        const rateEntry = periodEntries.find(p => p.classification === cls);
-                        const monthsLabel = s.start===s.end ? MONTH_NAMES[s.start] : `${MONTH_NAMES[s.start]}-${MONTH_NAMES[s.end]}`;
-                        return (
-                          <TableRow key={`season-${idx}-${cls}`}> 
-                            <TableCell>{i2===0? monthsLabel: ''}</TableCell>
-                            <TableCell>{cls}</TableCell>
-                            <TableCell>{wd.length? rangesFromHourArray(wd): '—'}</TableCell>
-                            <TableCell>{we.length? rangesFromHourArray(we): '—'}</TableCell>
-                            <TableCell>{rateEntry && rateEntry.rate!=null ? rateEntry.rate.toFixed(4): '—'}</TableCell>
-                          </TableRow>
-                        );
-                      });
-                    })}
-                  </TableBody>
-                </Table>
-              </TableCell>
-            </TableRow>
-          )}
-          {demandTiers.length > 0 && (
-            <TableRow>
-              <TableCell colSpan={2} sx={{ p: 0 }}>
-                <Table size="small" sx={{ '& td, & th': { border: 0 } }}>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 600 }}>Demand TOU Period</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Tier</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Up To (kW)</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Rate ($/kW)</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {demandTiers.map(r => (
-                      <TableRow key={`d-${r.period}-${r.tier}`}>
-                        <TableCell>{r.period}</TableCell>
-                        <TableCell>{r.tier}</TableCell>
-                        <TableCell>{r.max != null ? r.max : '—'}</TableCell>
-                        <TableCell>{r.rate.toFixed(2)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableCell>
-            </TableRow>
-          )}
-          {energyTiers.length === 0 && demandTiers.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={2} sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
-                No rate structure fields returned. Provide OPEN_EI_API_KEY server env var to enable detailed rates.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  );
-}
