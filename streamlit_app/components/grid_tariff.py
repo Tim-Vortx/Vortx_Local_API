@@ -3,7 +3,14 @@ import streamlit as st
 def show():
     st.header("⚡ Grid & Tariff")
 
-    st.radio("Connection Type", ["Grid-Connected", "Off-Grid"], key="grid_connection")
+    options = ["Grid-Connected", "Off-Grid"]
+    default_connection = st.session_state.get("grid_connection", "Grid-Connected")
+    st.radio(
+        "Connection Type",
+        options,
+        key="grid_connection",
+        index=options.index(default_connection)
+    )
 
     if st.session_state.get("grid_connection") == "Grid-Connected":
         st.text_input("Utility", key="utility_name", value=st.session_state.get("utility_name", ""))
