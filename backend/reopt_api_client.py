@@ -104,6 +104,19 @@ def _normalize_scenario(scn: dict) -> dict:
                 f"ElectricLoad.loads_kw length {len(loads)} does not match expected {expected_len} (8760 * time_steps_per_hour)"
             )
 
+    # Site validation: ensure latitude and longitude are present and numeric
+    site = s.get("Site", {}) or {}
+    lat = site.get("latitude")
+    lon = site.get("longitude")
+    if lat is None or lon is None:
+        raise ValueError("Site.latitude and Site.longitude are required")
+    try:
+        site["latitude"] = float(lat)
+        site["longitude"] = float(lon)
+    except Exception:
+        raise ValueError("Site.latitude and Site.longitude must be numeric")
+    s["Site"] = site
+
     # ElectricTariff normalization
     tx = s.get("ElectricTariff", {}) or {}
     # Common shorthand: single energy charge -> blended annual energy rate
@@ -222,7 +235,11 @@ async def run_reopt(scenario: Scenario, solver: Optional[str] = Query(None)):
     except Exception:
         raw = json.loads(scenario.json())
 
-    normalized = _normalize_scenario(raw)
+    try:
+        normalized = _normalize_scenario(raw)
+    except ValueError as ve:
+        # Return a 422 so the client (UI) can show a validation error instead of launching Julia
+        raise HTTPException(status_code=422, detail=str(ve))
     scenario_json_str = json.dumps(normalized, indent=2)
     print(f"[DEBUG] Received (normalized) scenario for run_id={run_id}: {scenario_json_str}")
     scenario_file.write_text(scenario_json_str)
@@ -313,8 +330,12 @@ async def submit(scenario: dict = Body(...)):
     """
     try:
         normalized = _normalize_scenario(scenario)
+    except ValueError as ve:
+        # Reject invalid input rather than running Julia with bad inputs
+        raise HTTPException(status_code=422, detail=str(ve))
     except Exception:
-        normalized = scenario  # best-effort pass-through
+        # Any other unexpected normalization error
+        raise HTTPException(status_code=400, detail="bad scenario payload")
 
     try:
         run_id = str(uuid.uuid4())

@@ -1,0 +1,18 @@
+{
+  "Settings": {
+    "time_steps_per_hour": 1,
+    "off_grid_flag": false
+  },
+  "Site": {
+    "name": "",
+    "site_location": "98377"
+  },
+  "ElectricLoad": {},
+  "ElectricTariff": {
+    "urdb_rate_name": "",
+    "urdb_utility_name": ""
+  },
+  "PV": {},
+  "ElectricStorage": {},
+  "Financial": {}
+}

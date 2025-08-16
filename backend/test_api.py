@@ -63,7 +63,7 @@ def test_run_reopt_valid_payload():
     assert "run_id" in data
 import pytest
 from fastapi.testclient import TestClient
-from api import app
+from backend.reopt_api_client import app
 
 client = TestClient(app)
 

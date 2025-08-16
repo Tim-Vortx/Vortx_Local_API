@@ -46,7 +46,7 @@ These environment variables adjust runtime behavior:
 ### Running the server
 Start the API locally with:
 ```
-uvicorn backend.api:app --reload
+uvicorn backend.reopt_api_client:app --reload
 ```
 
 Submit a scenario and retrieve results:
