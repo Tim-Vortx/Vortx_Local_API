@@ -83,8 +83,7 @@ def _sync_scenario_to_session():
     if st.session_state.get("_synced_from_scenario", False):
         return
     sc = st.session_state.get("scenario", {}) or {}
-    # Site
-    site = sc.get("Site", {}) or {}
+
     def _set_if_empty(key, value):
         if value is None:
             return
@@ -93,6 +92,16 @@ def _sync_scenario_to_session():
             return
         st.session_state[key] = value
 
+    # Settings
+    settings = sc.get("Settings", {}) or {}
+    if "off_grid_flag" in settings:
+        _set_if_empty(
+            "grid_connection",
+            "Off-Grid" if settings.get("off_grid_flag") else "Grid-Connected",
+        )
+
+    # Site
+    site = sc.get("Site", {}) or {}
     if "name" in site:
         _set_if_empty("site_name", site.get("name"))
     if "site_location" in site:
