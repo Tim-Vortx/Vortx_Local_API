@@ -31,6 +31,7 @@ async def _run_julia(run_id: str, scenario_file: Path, result_file: Path, solver
     status_path = RUNS_DIR / run_id / "status.json"
     stdout_path = RUNS_DIR / run_id / "stdout.log"
     stderr_path = RUNS_DIR / run_id / "stderr.log"
+    print(f"[DEBUG] _run_julia started for run_id={run_id}")
 
     cmd = [
         "julia",
@@ -45,13 +46,17 @@ async def _run_julia(run_id: str, scenario_file: Path, result_file: Path, solver
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
+    print(f"[DEBUG] Julia process started for run_id={run_id}")
     stdout, stderr = await proc.communicate()
+    print(f"[DEBUG] Julia process finished for run_id={run_id} with returncode={proc.returncode}")
 
     RUNS_DIR.joinpath(run_id).mkdir(parents=True, exist_ok=True)
     stdout_path.write_bytes(stdout)
     stderr_path.write_bytes(stderr)
+    print(f"[DEBUG] Wrote stdout and stderr for run_id={run_id}")
 
     if proc.returncode != 0:
+        print(f"[DEBUG] Julia process error for run_id={run_id}: returncode={proc.returncode}")
         status = {"status": "error", "returncode": proc.returncode}
         if stderr:
             status["error"] = stderr.decode(errors="ignore")
@@ -62,9 +67,11 @@ async def _run_julia(run_id: str, scenario_file: Path, result_file: Path, solver
         data = json.loads(result_file.read_text())
         status = {"status": "completed"}
         status_path.write_text(json.dumps(status))
+        print(f"[DEBUG] Run completed for run_id={run_id}")
     except Exception as exc:  # pragma: no cover - defensive
         status = {"status": "error", "error": str(exc)}
         status_path.write_text(json.dumps(status))
+        print(f"[DEBUG] Exception in _run_julia for run_id={run_id}: {exc}")
 
 
 @app.post("/reopt/run")
@@ -79,6 +86,7 @@ async def run_reopt(scenario: Scenario, solver: Optional[str] = Query(None)):
     scenario_file.write_text(scenario.json())
     (run_dir / "status.json").write_text(json.dumps({"status": "running"}))
 
+    print(f"[DEBUG] Starting background Julia task for run_id={run_id}")
     asyncio.create_task(
         _run_julia(run_id, scenario_file, result_file, solver or DEFAULT_SOLVER)
     )

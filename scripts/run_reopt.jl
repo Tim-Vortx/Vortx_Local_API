@@ -1,10 +1,14 @@
 #!/usr/bin/env julia
 # Simple wrapper to run REopt from the command line and write JSON results
 
+
 import Pkg
 Pkg.activate(joinpath(@__DIR__, ".."))
 
 using REopt, JuMP
+import HiGHS
+import GLPK
+using JSON3
 
 function main()
     if length(ARGS) < 3
@@ -17,17 +21,14 @@ function main()
 
     # choose solver
     if solver == "HiGHS"
-        import HiGHS
         opt = HiGHS.Optimizer
     elseif solver == "GLPK"
-        import GLPK
         opt = GLPK.GLPK.Optimizer
     else
         println("Unknown solver: ", solver)
         exit(2)
     end
 
-    using JSON3
     m = Model(opt)
     results = run_reopt(m, input_file)
     JSON3.write(output_file, results)
