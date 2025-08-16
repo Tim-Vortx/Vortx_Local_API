@@ -67,14 +67,20 @@ def _sync_session_to_scenario():
     if "utility_name" in st.session_state and st.session_state["utility_name"]:
         sc.setdefault("ElectricTariff", {})["urdb_utility_name"] = st.session_state["utility_name"]
     # DERs
-    if "pv_capacity_kw" in st.session_state and st.session_state["pv_capacity_kw"]:
-        sc.setdefault("PV", {})["installed_capacity_kw"] = st.session_state["pv_capacity_kw"]
-    if "bess_power_kw" in st.session_state or "bess_energy_kwh" in st.session_state:
-        es = sc.setdefault("ElectricStorage", {})
-        if "bess_power_kw" in st.session_state and st.session_state["bess_power_kw"]:
-            es["installed_power_kw"] = st.session_state["bess_power_kw"]
-        if "bess_energy_kwh" in st.session_state and st.session_state["bess_energy_kwh"]:
-            es["installed_energy_kwh"] = st.session_state["bess_energy_kwh"]
+    if st.session_state.get("solar_enabled", True):
+        if "pv_capacity_kw" in st.session_state and st.session_state["pv_capacity_kw"]:
+            sc.setdefault("PV", {})["installed_capacity_kw"] = st.session_state["pv_capacity_kw"]
+    else:
+        sc.pop("PV", None)
+    if st.session_state.get("battery_enabled", True):
+        if "bess_power_kw" in st.session_state or "bess_energy_kwh" in st.session_state:
+            es = sc.setdefault("ElectricStorage", {})
+            if "bess_power_kw" in st.session_state and st.session_state["bess_power_kw"]:
+                es["installed_power_kw"] = st.session_state["bess_power_kw"]
+            if "bess_energy_kwh" in st.session_state and st.session_state["bess_energy_kwh"]:
+                es["installed_energy_kwh"] = st.session_state["bess_energy_kwh"]
+    else:
+        sc.pop("ElectricStorage", None)
 
 
 def _sync_scenario_to_session():
