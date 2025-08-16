@@ -1,63 +1,58 @@
-# Vortx Opt2 REopt MVP
+# REopt® Julia package
+REopt.jl is the core module of the [REopt® techno-economic decision support platform](https://www.nrel.gov/reopt/), developed by the National Renewable Energy Laboratory (NREL). REopt® stands for **R**enewable **E**nergy integration and **opt**imization. REopt.jl is used within the publicly-accessible and open-source [REopt API](https://github.com/NREL/REopt_API), and the publicly available [REopt Web Tool](https://reopt.nrel.gov/tool) calls the REopt API.
 
-This repository contains a minimal example of connecting to NREL's REopt v3 API.
-It includes:
+The REopt® techno-economic decision support platform is used by researchers to optimize energy systems for buildings, campuses, communities, microgrids, and more. REopt identifies the optimal mix of renewable energy, conventional generation, storage, and electrification technologies to meet cost savings, resilience, emissions reductions, and energy performance goals.
 
-- **Flask backend** for submitting REopt scenarios and polling results.
-- **React frontend** for editing a scenario and viewing outputs. All charts and
-  tables are populated from live REopt API responses rather than static
-  placeholder data.
-- **Modular React components** (economics, performance, resilience, emissions
-  and payment schedule panels, plus dispatch charts) for visualizing the REopt
-  results.
+For more information about REopt.jl please see the Julia documentation:
+<!-- [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://nrel.github.io/REopt.jl/stable) -->
+[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://nrel.github.io/REopt.jl/dev)
+
 
 ## Quick Start
+Evaluating simple `PV` and `ElectricStorage` scenarios requires a linear program solver. Evaluating net-metering, `Generator`, multiple outages, or other more complex scenario makes the problem mixed-integer linear, and thus requires a MILP solver. See https://jump.dev/JuMP.jl/stable/installation/ for a list of solvers. The REopt package has been tested with , `HiGHS`, `Cbc`, `SCIP`, `Xpress` (commercial), and `CPLEX` (commercial).
 
-### Backend
+### Example
+```
+using REopt, JuMP, HiGHS
 
-1. Create `backend/.env` containing a valid NREL API key:
+m = Model(HiGHS.Optimizer)
+results = run_reopt(m, "pv_storage.json")
+```
+See the `test/scenarios` directory for examples of `scenario.json`.
 
-   ```
-   NREL_API_KEY=YOUR_REAL_NREL_KEY
-   ```
+For more details, including installation instructions, see the [documentation](https://nrel.github.io/REopt.jl/dev).
 
-   The backend loads this key from the environment and forwards it to the
-   NREL API; the frontend does not need to send the key with requests.
+## Local API Server
 
-2. Install requirements and start Flask on port 5000 (matching the React proxy):
+A simple FastAPI service is provided in `backend/api.py` to run REopt models.
 
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   python app.py
-   ```
+### Endpoints
+- `POST /reopt/run`: submit a scenario JSON body. Optional `solver` query parameter overrides the default solver.
+- `GET /reopt/result/{run_id}`: fetch run status or results.
 
-### Frontend
-
-The React dev server proxies API calls to the Flask backend. Install dependencies
-and start it with:
-
-```bash
-cd frontend
-npm install
-npm start
+### Environment setup
+Before using the API, instantiate Julia dependencies and install a solver:
+```
+julia --project=. -e 'using Pkg; Pkg.instantiate()'
+julia --project=. -e 'using Pkg; Pkg.add("HiGHS")'
 ```
 
-With both services running, open your browser at `http://localhost:3000` to try the app.
+### Configuration
+These environment variables adjust runtime behavior:
+- `REOPT_PROJECT_ROOT`: path to the REopt project (default: repository root).
+- `REOPT_RUNS_DIR`: directory for run metadata and results (default: `backend/runs`).
+- `REOPT_SOLVER`: default solver passed to Julia (default: `HiGHS`).
 
-### Frontend environment variables
+### Running the server
+Start the API locally with:
+```
+uvicorn backend.api:app --reload
+```
 
-The polling behavior in the React app can be tuned with the following variables (defaults in parentheses):
-
-- `REACT_APP_POLL_BASE_DELAY` – initial polling delay in milliseconds (5000)
-- `REACT_APP_MAX_POLL_TIME` – maximum total time to poll before giving up in milliseconds (300000)
-
-These can be set in a `.env` file inside the `frontend` directory if needed.
-
-## URDB Tariff Lookup
-
-The backend exposes a `/urdb` endpoint that proxies NREL's Utility Rate Database
-and caches results on disk for 24 hours. The React interface includes a *Fetch
-Tariffs* button which retrieves available rates for the provided location and
-lets you choose a tariff. The selected `urdb_label` is sent with the REopt
-scenario under `ElectricTariff`.
+Submit a scenario and retrieve results:
+```
+curl -X POST 'http://localhost:8000/reopt/run?solver=HiGHS' \
+     -H 'Content-Type: application/json' \
+     -d @scenario.json
+curl http://localhost:8000/reopt/result/<run_id>
+```
