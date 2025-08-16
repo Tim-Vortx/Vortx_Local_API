@@ -93,10 +93,9 @@ def _sync_scenario_to_session():
     def _set_if_empty(key, value):
         if value is None:
             return
-        existing = st.session_state.get(key, None)
-        if existing not in (None, "", 0):  # Avoid overwriting non-empty values
-            return
-        st.session_state[key] = value
+        existing = st.session_state.get(key)
+        if existing is None or existing == "":  # Only overwrite when no existing value
+            st.session_state[key] = value
 
     if "name" in site:
         _set_if_empty("site_name", site.get("name"))
