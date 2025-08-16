@@ -69,18 +69,20 @@ def _sync_session_to_scenario():
     if st.session_state.get("utility_name") is not None:
         sc.setdefault("ElectricTariff", {})["urdb_utility_name"] = st.session_state["utility_name"]
     # DERs
-    if st.session_state.get("pv_capacity_kw") is not None:
-        sc.setdefault("PV", {})["installed_capacity_kw"] = st.session_state["pv_capacity_kw"]
-    if (
-        st.session_state.get("bess_power_kw") is not None
-        or st.session_state.get("bess_energy_kwh") is not None
-    ):
-        es = sc.setdefault("ElectricStorage", {})
-        if st.session_state.get("bess_power_kw") is not None:
-            es["installed_power_kw"] = st.session_state["bess_power_kw"]
-        if st.session_state.get("bess_energy_kwh") is not None:
-            es["installed_energy_kwh"] = st.session_state["bess_energy_kwh"]
-
+    if st.session_state.get("solar_enabled", True):
+        if "pv_capacity_kw" in st.session_state and st.session_state["pv_capacity_kw"]:
+            sc.setdefault("PV", {})["installed_capacity_kw"] = st.session_state["pv_capacity_kw"]
+    else:
+        sc.pop("PV", None)
+    if st.session_state.get("battery_enabled", True):
+        if "bess_power_kw" in st.session_state or "bess_energy_kwh" in st.session_state:
+            es = sc.setdefault("ElectricStorage", {})
+            if "bess_power_kw" in st.session_state and st.session_state["bess_power_kw"]:
+                es["installed_power_kw"] = st.session_state["bess_power_kw"]
+            if "bess_energy_kwh" in st.session_state and st.session_state["bess_energy_kwh"]:
+                es["installed_energy_kwh"] = st.session_state["bess_energy_kwh"]
+    else:
+        sc.pop("ElectricStorage", None)
 
 def _sync_scenario_to_session():
     """Copy nested scenario values back to top-level widget keys so Inputs UI shows saved drafts."""
