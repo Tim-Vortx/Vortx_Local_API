@@ -15,7 +15,13 @@ def show():
     total_hours = len(results.get("ElectricLoad", {}).get("load_series_kw", [])) or (8760 * tph)
     max_day = max(0, total_hours // (24 * tph) - 1)
 
-    day = st.slider("Day of year", min_value=0, max_value=max_day, value=0)
+    day = st.slider(
+        "Day of year",
+        min_value=0,
+        max_value=max_day,
+        value=st.session_state.get("daily_ops_day", 0),
+        key="daily_ops_day",
+    )
     df = to_daily_series(results, day_index=day, tph=tph)
 
     st.altair_chart(daily_ops_chart(df), use_container_width=True)

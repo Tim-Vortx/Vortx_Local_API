@@ -55,16 +55,18 @@ def _sync_session_to_scenario():
     sc.setdefault("Settings", {}).setdefault("time_steps_per_hour", 1)
     # Site
     site = sc.setdefault("Site", {})
-    if "site_name" in st.session_state and st.session_state["site_name"]:
+    if st.session_state.get("site_name") is not None:
         site["name"] = st.session_state["site_name"]
-    if "site_location" in st.session_state and st.session_state["site_location"]:
+    if st.session_state.get("site_location") is not None:
         site["site_location"] = st.session_state["site_location"]
     # Grid / tariff
-    if "grid_connection" in st.session_state:
-        sc.setdefault("Settings", {})["off_grid_flag"] = (st.session_state.get("grid_connection") == "Off-Grid")
-    if "tariff_name" in st.session_state and st.session_state["tariff_name"]:
+    if st.session_state.get("grid_connection") is not None:
+        sc.setdefault("Settings", {})["off_grid_flag"] = (
+            st.session_state.get("grid_connection") == "Off-Grid"
+        )
+    if st.session_state.get("tariff_name") is not None:
         sc.setdefault("ElectricTariff", {})["urdb_rate_name"] = st.session_state["tariff_name"]
-    if "utility_name" in st.session_state and st.session_state["utility_name"]:
+    if st.session_state.get("utility_name") is not None:
         sc.setdefault("ElectricTariff", {})["urdb_utility_name"] = st.session_state["utility_name"]
     # DERs
     if st.session_state.get("solar_enabled", True):
@@ -82,23 +84,30 @@ def _sync_session_to_scenario():
     else:
         sc.pop("ElectricStorage", None)
 
-
 def _sync_scenario_to_session():
     """Copy nested scenario values back to top-level widget keys so Inputs UI shows saved drafts."""
     # Only sync once per session to avoid overwriting user edits on reruns
     if st.session_state.get("_synced_from_scenario", False):
         return
     sc = st.session_state.get("scenario", {}) or {}
-    # Site
-    site = sc.get("Site", {}) or {}
+
     def _set_if_empty(key, value):
         if value is None:
             return
-        existing = st.session_state.get(key, None)
-        if existing not in (None, "", 0):  # Avoid overwriting non-empty values
-            return
-        st.session_state[key] = value
+        existing = st.session_state.get(key)
+        if existing is None or existing == "":  # Only overwrite when no existing value
+            st.session_state[key] = value
 
+    # Settings
+    settings = sc.get("Settings", {}) or {}
+    if "off_grid_flag" in settings:
+        _set_if_empty(
+            "grid_connection",
+            "Off-Grid" if settings.get("off_grid_flag") else "Grid-Connected",
+        )
+
+    # Site
+    site = sc.get("Site", {}) or {}
     if "name" in site:
         _set_if_empty("site_name", site.get("name"))
     if "site_location" in site:

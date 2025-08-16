@@ -42,8 +42,18 @@ def show():
 
     st.markdown("---")
     st.write("Or create a synthetic profile:")
-    base_load = st.number_input("Base Load (kW)", min_value=0.0, value=100.0, key="base_load_kw")
-    peak_load = st.number_input("Peak Load (kW)", min_value=0.0, value=300.0, key="peak_load_kw")
+    base_load = st.number_input(
+        "Base Load (kW)",
+        min_value=0.0,
+        value=st.session_state.get("base_load_kw", 100.0),
+        key="base_load_kw",
+    )
+    peak_load = st.number_input(
+        "Peak Load (kW)",
+        min_value=0.0,
+        value=st.session_state.get("peak_load_kw", 300.0),
+        key="peak_load_kw",
+    )
 
     # Respect Settings.time_steps_per_hour if the UI has it
     tph = 1
