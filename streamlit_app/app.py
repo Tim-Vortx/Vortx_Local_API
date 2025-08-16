@@ -55,25 +55,30 @@ def _sync_session_to_scenario():
     sc.setdefault("Settings", {}).setdefault("time_steps_per_hour", 1)
     # Site
     site = sc.setdefault("Site", {})
-    if "site_name" in st.session_state and st.session_state["site_name"]:
+    if st.session_state.get("site_name") is not None:
         site["name"] = st.session_state["site_name"]
-    if "site_location" in st.session_state and st.session_state["site_location"]:
+    if st.session_state.get("site_location") is not None:
         site["site_location"] = st.session_state["site_location"]
     # Grid / tariff
-    if "grid_connection" in st.session_state:
-        sc.setdefault("Settings", {})["off_grid_flag"] = (st.session_state.get("grid_connection") == "Off-Grid")
-    if "tariff_name" in st.session_state and st.session_state["tariff_name"]:
+    if st.session_state.get("grid_connection") is not None:
+        sc.setdefault("Settings", {})["off_grid_flag"] = (
+            st.session_state.get("grid_connection") == "Off-Grid"
+        )
+    if st.session_state.get("tariff_name") is not None:
         sc.setdefault("ElectricTariff", {})["urdb_rate_name"] = st.session_state["tariff_name"]
-    if "utility_name" in st.session_state and st.session_state["utility_name"]:
+    if st.session_state.get("utility_name") is not None:
         sc.setdefault("ElectricTariff", {})["urdb_utility_name"] = st.session_state["utility_name"]
     # DERs
-    if "pv_capacity_kw" in st.session_state and st.session_state["pv_capacity_kw"]:
+    if st.session_state.get("pv_capacity_kw") is not None:
         sc.setdefault("PV", {})["installed_capacity_kw"] = st.session_state["pv_capacity_kw"]
-    if "bess_power_kw" in st.session_state or "bess_energy_kwh" in st.session_state:
+    if (
+        st.session_state.get("bess_power_kw") is not None
+        or st.session_state.get("bess_energy_kwh") is not None
+    ):
         es = sc.setdefault("ElectricStorage", {})
-        if "bess_power_kw" in st.session_state and st.session_state["bess_power_kw"]:
+        if st.session_state.get("bess_power_kw") is not None:
             es["installed_power_kw"] = st.session_state["bess_power_kw"]
-        if "bess_energy_kwh" in st.session_state and st.session_state["bess_energy_kwh"]:
+        if st.session_state.get("bess_energy_kwh") is not None:
             es["installed_energy_kwh"] = st.session_state["bess_energy_kwh"]
 
 
