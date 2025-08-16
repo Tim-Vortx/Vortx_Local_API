@@ -3,7 +3,11 @@ import streamlit as st
 def show():
     st.header("🛡️ Resilience Settings")
 
-    st.checkbox("Resilience Mode (Backup Power)", key="resilience_mode")
+    st.checkbox(
+        "Resilience Mode (Backup Power)",
+        key="resilience_mode",
+        value=st.session_state.get("resilience_mode", False),
+    )
     if st.session_state.get("resilience_mode"):
         st.number_input(
             "Critical Load Fraction (0-1)",
