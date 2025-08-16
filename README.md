@@ -21,3 +21,38 @@ results = run_reopt(m, "pv_storage.json")
 See the `test/scenarios` directory for examples of `scenario.json`.
 
 For more details, including installation instructions, see the [documentation](https://nrel.github.io/REopt.jl/dev).
+
+## Local API Server
+
+A simple FastAPI service is provided in `backend/api.py` to run REopt models.
+
+### Endpoints
+- `POST /reopt/run`: submit a scenario JSON body. Optional `solver` query parameter overrides the default solver.
+- `GET /reopt/result/{run_id}`: fetch run status or results.
+
+### Environment setup
+Before using the API, instantiate Julia dependencies and install a solver:
+```
+julia --project=. -e 'using Pkg; Pkg.instantiate()'
+julia --project=. -e 'using Pkg; Pkg.add("HiGHS")'
+```
+
+### Configuration
+These environment variables adjust runtime behavior:
+- `REOPT_PROJECT_ROOT`: path to the REopt project (default: repository root).
+- `REOPT_RUNS_DIR`: directory for run metadata and results (default: `backend/runs`).
+- `REOPT_SOLVER`: default solver passed to Julia (default: `HiGHS`).
+
+### Running the server
+Start the API locally with:
+```
+uvicorn backend.api:app --reload
+```
+
+Submit a scenario and retrieve results:
+```
+curl -X POST 'http://localhost:8000/reopt/run?solver=HiGHS' \
+     -H 'Content-Type: application/json' \
+     -d @scenario.json
+curl http://localhost:8000/reopt/result/<run_id>
+```
