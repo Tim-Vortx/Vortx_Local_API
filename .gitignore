@@ -1,6 +1,16 @@
+<<<<<<< HEAD
 __pycache__/
 *.py[cod]
 node_modules/
 .env
 logs/
 backend/cache/
+=======
+.vscode
+.DS_Store
+docs/build/
+docs/Manifest.toml
+**.log
+backend/runs/
+**/__pycache__/
+>>>>>>> b1917449c847ffebc910c439ca178e843e3b0d6a
