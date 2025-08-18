@@ -2,7 +2,14 @@ import streamlit as st
 import json
 import time
 import os
-from utils.backend_client import submit_scenario, get_status, get_result
+from utils.backend_client import (
+    submit_scenario,
+    get_status,
+    get_result,
+    submit_scenario_nrel,
+    get_status_nrel,
+    get_result_nrel,
+)
 from utils.validators import build_reopt_scenario, preflight_checks
 
 
@@ -45,14 +52,35 @@ def show():
 
     disable_run = bool(errors) or bool(preflight_errors)
 
+    backend_choice = st.radio(
+        "Execution mode",
+        ["Local", "NREL API"],
+        horizontal=True,
+        key="reopt_backend",
+    )
+
     if st.button("Run REopt", disabled=disable_run, key="run_btn"):
         # Reset scenario in session state to ensure fresh submission
         st.session_state["scenario"] = None
 
+        # Select appropriate backend helpers
+        if backend_choice == "NREL API":
+            submit = submit_scenario_nrel
+            status_fn = get_status_nrel
+            result_fn = get_result_nrel
+        else:
+            submit = submit_scenario
+            status_fn = get_status
+            result_fn = get_result
+
         with st.status("Submitting & optimizing...", expanded=True) as status:
             try:
-                job = submit_scenario(scenario)
-                run_uuid = job.get("run_uuid")
+                job = submit(scenario)
+                run_uuid = (
+                    job.get("run_uuid")
+                    or job.get("run_id")
+                    or job.get("job_id")
+                )
                 status.update(label=f"Submitted. run_uuid = {run_uuid}. Polling…")
 
                 # Poll the backend until it reports completion (or failure) or we hit a timeout.
@@ -63,7 +91,7 @@ def show():
                 last_out = None
                 while True:
                     try:
-                        out = get_status(run_uuid)
+                        out = status_fn(run_uuid)
                         last_out = out
                         print(f"[DEBUG] Backend response: {out}")  # Log backend response
                     except Exception as exc:
@@ -98,7 +126,7 @@ def show():
                             else:
                                 # Fetch the detailed result from /reopt/result/<id>
                                 try:
-                                    detailed = get_result(run_uuid)
+                                    detailed = result_fn(run_uuid)
                                 except Exception:
                                     # fallback: set whatever we have
                                     st.session_state["results"] = out
