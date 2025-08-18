@@ -3,3 +3,4 @@ requests>=2.31
 pandas>=2.2
 numpy>=1.26
 altair>=5.3
+xlsxwriter>=3.0
