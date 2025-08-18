@@ -4,7 +4,6 @@
 
 import Pkg
 Pkg.activate(joinpath(@__DIR__, ".."))
-Pkg.add("GeoInterfaceRecipes")
 
 using REopt, JuMP
 import HiGHS
