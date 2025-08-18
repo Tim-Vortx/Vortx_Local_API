@@ -153,6 +153,44 @@ def _normalize_scenario(scn: dict) -> dict:
     filtered_tx = {k: v for k, v in tx.items() if k in allowed_tx_keys}
     s["ElectricTariff"] = filtered_tx
 
+    # Financial normalization: strip unknown keys to avoid Julia MethodError
+    fin = s.get("Financial", {}) or {}
+    allowed_fin_keys = {
+        "analysis_years",
+        "offtaker_discount_rate_fraction",
+        "elec_cost_escalation_rate_fraction",
+        "om_cost_escalation_rate_fraction",
+        "offtaker_tax_rate_fraction",
+        "third_party_ownership",
+        "owner_tax_rate_fraction",
+        "owner_discount_rate_fraction",
+        "existing_boiler_fuel_cost_escalation_rate_fraction",
+        "boiler_fuel_cost_escalation_rate_fraction",
+        "chp_fuel_cost_escalation_rate_fraction",
+        "generator_fuel_cost_escalation_rate_fraction",
+        "value_of_lost_load_per_kwh",
+        "microgrid_upgrade_cost_fraction",
+        "macrs_five_year",
+        "macrs_seven_year",
+        "offgrid_other_capital_costs",
+        "offgrid_other_annual_costs",
+        "min_initial_capital_costs_before_incentives",
+        "max_initial_capital_costs_before_incentives",
+        "CO2_cost_per_tonne",
+        "CO2_cost_escalation_rate_fraction",
+        "NOx_grid_cost_per_tonne",
+        "SO2_grid_cost_per_tonne",
+        "PM25_grid_cost_per_tonne",
+        "NOx_onsite_fuelburn_cost_per_tonne",
+        "SO2_onsite_fuelburn_cost_per_tonne",
+        "PM25_onsite_fuelburn_cost_per_tonne",
+        "NOx_cost_escalation_rate_fraction",
+        "SO2_cost_escalation_rate_fraction",
+        "PM25_cost_escalation_rate_fraction",
+    }
+    filtered_fin = {k: v for k, v in fin.items() if k in allowed_fin_keys}
+    s["Financial"] = filtered_fin
+
     return s
 
 

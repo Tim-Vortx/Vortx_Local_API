@@ -3,7 +3,7 @@ import os
 import json
 import pytest
 from fastapi.testclient import TestClient
-from backend.reopt_api_client import app
+from backend.api import app
 
 client = TestClient(app)
 
@@ -92,14 +92,13 @@ def test_run_reopt():
             "analysis_years": 25,
             "offtaker_discount_rate_fraction": 0.08,
             "elec_cost_escalation_rate_fraction": 0.025,
-            "itc": 0.3,
-            "macrs_option_years": 5,
-            "bonus_depreciation_fraction": 0.0,
-            "capital_incentive": 0.0,
+            "om_cost_escalation_rate_fraction": 0.025,
+            "offtaker_tax_rate_fraction": 0.26,
+            "third_party_ownership": False,
         },
     }
 
-    response = client.post("/reopt/run", json={"scenario": scenario})
+    response = client.post("/reopt/run", json=scenario)
     assert response.status_code == 200
     assert "run_id" in response.json()
 
