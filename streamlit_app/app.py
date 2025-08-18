@@ -1,6 +1,8 @@
 # frontend/app.py
 import os
 import streamlit as st
+import sys
+sys.path.append('/Users/tim_v/Coding/GeM/Vortx_Local_API')
 
 # --- Sidebar / page setup ---
 st.set_page_config(page_title="Vortx Microgrid Modeler", layout="wide")
@@ -21,50 +23,23 @@ if "results" not in st.session_state:
     st.session_state["results"] = None
 
 # --- Import modular cards (each has a show() that mutates st.session_state) ---
-try:
-    # Prefer package-relative imports when running tests/importing as a package
-    from .components import (
-        project_location,
-        load_builder,
-        grid_tariff,
-        ders,
-        resilience,
-        financials,
-        run_panel,
-        results_kpi,
-        results_daily_ops,
-        results_monthly,
-        results_proforma,
-        results_capex_opex,
-        results_emissions_resilience,
-        scenarios_compare,
-        centrifuge_load_model,
-    )
-except Exception:
-    # Fallback for `streamlit run streamlit_app/app.py` (script context).
-    # Ensure the streamlit_app package directory is on sys.path so a plain
-    # `import components` will resolve to streamlit_app/components.
-    import sys, os
-    pkg_dir = os.path.dirname(__file__)
-    if pkg_dir not in sys.path:
-        sys.path.insert(0, pkg_dir)
-    from components import (
-        project_location,
-        load_builder,
-        grid_tariff,
-        ders,
-        resilience,
-        financials,
-        run_panel,
-        results_kpi,
-        results_daily_ops,
-        results_monthly,
-        results_proforma,
-        results_capex_opex,
-        results_emissions_resilience,
-        scenarios_compare,
-        centrifuge_load_model,
-    )
+from streamlit_app.components import (
+    project_location,
+    load_builder,
+    grid_tariff,
+    ders,
+    resilience,
+    financials,
+    run_panel,
+    results_kpi,
+    results_daily_ops,
+    results_monthly,
+    results_proforma,
+    results_capex_opex,
+    results_emissions_resilience,
+    scenarios_compare,
+    centrifuge_load_model,
+)
 
 
 def _sync_scenario_to_session() -> None:
@@ -85,7 +60,7 @@ def _sync_scenario_to_session() -> None:
 # --- Sidebar nav ---
 with st.sidebar:
     st.header("Navigation")
-    section = st.radio("Section", ["Inputs", "Run", "Results", "Scenarios", "Centrifuge Model"], index=0)
+    section = st.radio("Section", ["Centrifuge Model", "Inputs", "Run", "Results", "Scenarios"], index=0)
     st.caption(f"Backend: `{BACKEND_URL}` (set VORTX_BACKEND_URL to change)")
 
 # --- Page router ---
@@ -128,3 +103,10 @@ elif section == "Scenarios":
 elif section == "Centrifuge Model":
     with st.container(border=True):
         centrifuge_load_model.show()
+
+# Add a __main__ check to handle relative imports when executed directly
+if __name__ == "__main__" and __package__ is None:
+    import os
+    import sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+

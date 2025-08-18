@@ -1,5 +1,5 @@
 import streamlit as st
-from utils.backend_client import get_urdb
+from streamlit_app.utils.backend_client import get_urdb
 
 
 def show():
@@ -11,6 +11,8 @@ def show():
     settings["off_grid_flag"] = st.checkbox("Off-grid (no utility interconnection)", value=settings.get("off_grid_flag", False), key="offgrid_toggle")
     if settings["off_grid_flag"]:
         et.clear()
+        scn["Settings"]["off_grid_flag"] = True  # Explicitly set off_grid_flag to True
+        scn["ElectricTariff"] = {}  # Clear ElectricTariff in the scenario JSON
         st.info("Off-grid selected. Tariff inputs are ignored.")
         return
 
