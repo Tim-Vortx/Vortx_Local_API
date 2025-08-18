@@ -177,19 +177,35 @@ async def _run_julia(run_id: str, scenario_file: Path, result_file: Path, solver
         stderr=asyncio.subprocess.PIPE,
     )
     print(f"[DEBUG] Julia process started for run_id={run_id}")
-    stdout, stderr = await proc.communicate()
-    print(f"[DEBUG] Julia process finished for run_id={run_id} with returncode={proc.returncode}")
+
+    async def _stream(stream, path: Path, label: str) -> str:
+        lines: list[str] = []
+        with path.open("wb") as f:
+            while True:
+                line = await stream.readline()
+                if not line:
+                    break
+                f.write(line)
+                f.flush()
+                text = line.decode(errors="ignore")
+                lines.append(text)
+                print(f"[{label}] {text.rstrip()}")
+        return "".join(lines)
+
+    stdout_task = asyncio.create_task(_stream(proc.stdout, stdout_path, "STDOUT"))
+    stderr_task = asyncio.create_task(_stream(proc.stderr, stderr_path, "STDERR"))
+    returncode = await proc.wait()
+    await stdout_task
+    stderr_text = await stderr_task
+    print(f"[DEBUG] Julia process finished for run_id={run_id} with returncode={returncode}")
 
     RUNS_DIR.joinpath(run_id).mkdir(parents=True, exist_ok=True)
-    stdout_path.write_bytes(stdout)
-    stderr_path.write_bytes(stderr)
     print(f"[DEBUG] Wrote stdout and stderr for run_id={run_id}")
 
     # Even if returncode == 0, check stderr for fatal keywords (MethodError/ERROR)
-    stderr_text = stderr.decode(errors="ignore") if stderr else ""
-    if proc.returncode != 0 or (stderr_text and ("MethodError" in stderr_text or "ERROR" in stderr_text)):
-        print(f"[DEBUG] Julia process error for run_id={run_id}: returncode={proc.returncode}")
-        status = {"status": "error", "returncode": proc.returncode}
+    if returncode != 0 or (stderr_text and ("MethodError" in stderr_text or "ERROR" in stderr_text)):
+        print(f"[DEBUG] Julia process error for run_id={run_id}: returncode={returncode}")
+        status = {"status": "error", "returncode": returncode}
         if stderr_text:
             status["error"] = stderr_text
         status_path.write_text(json.dumps(status))
@@ -324,9 +340,12 @@ async def submit(scenario: dict = Body(...)):
         scenario_file = run_dir / "scenario.json"
         result_file = run_dir / "result.json"
 
-        scenario_file.write_text(json.dumps(normalized, indent=2))
+        scenario_json_str = json.dumps(normalized, indent=2)
+        print(f"[DEBUG] Received (normalized) scenario for run_id={run_id}: {scenario_json_str}")
+        scenario_file.write_text(scenario_json_str)
         (run_dir / "status.json").write_text(json.dumps({"status": "running"}))
 
+        print(f"[DEBUG] Starting background Julia task for run_id={run_id}")
         asyncio.create_task(
             _run_julia(run_id, scenario_file, result_file, os.getenv("REOPT_SOLVER", DEFAULT_SOLVER))
         )
