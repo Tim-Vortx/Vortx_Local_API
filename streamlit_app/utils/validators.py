@@ -97,8 +97,39 @@ def build_reopt_scenario(state: dict) -> tuple[dict, list]:
         el["loads_kw"] = el_state["loads_kw"]
         el["year"] = el_state.get("year", 2024)
     else:
-        el["doe_reference_name"] = sget("doe_reference_name") or el_state.get("doe_reference_name") or "LargeOffice"
-        el["annual_kwh"] = sget("annual_kwh") or el_state.get("annual_kwh", 1_500_000)
+        # Support synthetic inputs: peak_kw + load_factor → generate loads_kw
+        peak = el_state.get("peak_kw") or sget("peak_kw")
+        lf = el_state.get("load_factor") or sget("load_factor")
+        tph = scn.get("Settings", {}).get("time_steps_per_hour", 1)
+        if peak and lf is not None:
+            try:
+                peak_f = float(peak)
+                lf_f = float(lf)
+                total_steps = 8760 * int(tph)
+                base = peak_f * 0.1
+                amp = peak_f - base
+                profile = []
+                for step in range(total_steps):
+                    hour = (step / tph) % 24
+                    x = 0.5 * (1 + __import__("math").cos((hour - 16) / 24.0 * 2 * __import__("math").pi))
+                    val = base + x * amp
+                    profile.append(val)
+                # scale to match annual energy = peak * lf * 8760
+                annual_kwh = peak_f * lf_f * 8760.0
+                current_sum = sum(profile)
+                scale = (annual_kwh / current_sum) if current_sum > 0 else 1.0
+                profile = [v * scale for v in profile]
+                el["loads_kw"] = profile
+                el["year"] = el_state.get("year", 2024)
+                el["peak_kw"] = peak_f
+                el["load_factor"] = lf_f
+            except Exception:
+                # fallback to legacy DOE-style fields if synthesis fails
+                el["doe_reference_name"] = sget("doe_reference_name") or el_state.get("doe_reference_name") or "LargeOffice"
+                el["annual_kwh"] = sget("annual_kwh") or el_state.get("annual_kwh", 1_500_000)
+        else:
+            el["doe_reference_name"] = sget("doe_reference_name") or el_state.get("doe_reference_name") or "LargeOffice"
+            el["annual_kwh"] = sget("annual_kwh") or el_state.get("annual_kwh", 1_500_000)
 
     # Tariff
     et = scn["ElectricTariff"]

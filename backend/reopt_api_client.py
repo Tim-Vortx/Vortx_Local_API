@@ -198,24 +198,39 @@ async def _run_julia(run_id: str, scenario_file: Path, result_file: Path, solver
     stderr_path.write_bytes(stderr)
     print(f"[DEBUG] Wrote stdout and stderr for run_id={run_id}")
 
-    # Even if returncode == 0, check stderr for fatal keywords (MethodError/ERROR)
+    # Decode stdout/stderr for diagnostics
+    stdout_text = stdout.decode(errors="ignore") if stdout else ""
     stderr_text = stderr.decode(errors="ignore") if stderr else ""
-    if proc.returncode != 0 or (stderr_text and ("MethodError" in stderr_text or "ERROR" in stderr_text)):
+
+    # Treat non-zero return codes and MethodError as fatal. Avoid treating every
+    # occurrence of the string "ERROR" in logs as a fatal condition because
+    # some packages emit non-fatal ERROR-level messages during precompilation.
+    fatal = proc.returncode != 0 or ("MethodError" in stderr_text)
+    if fatal:
         print(f"[DEBUG] Julia process error for run_id={run_id}: returncode={proc.returncode}")
         status = {"status": "error", "returncode": proc.returncode}
         if stderr_text:
             status["error"] = stderr_text
+        if stdout_text:
+            status["stdout"] = stdout_text
         status_path.write_text(json.dumps(status))
         return
 
     try:
-        # Ensure result.json exists; otherwise status will be error below
-        data = json.loads(result_file.read_text())
+        # Ensure result.json exists and is valid JSON; otherwise mark as error
+        data_text = result_file.read_text()
+        data = json.loads(data_text)
         status = {"status": "completed"}
         status_path.write_text(json.dumps(status))
         print(f"[DEBUG] Run completed for run_id={run_id}")
     except Exception as exc:  # pragma: no cover - defensive
         status = {"status": "error", "error": str(exc)}
+        # include captured stdout/stderr to help debug why parsing failed
+        if stderr_text:
+            status["stderr"] = stderr_text
+        if stdout_text:
+            # keep snippet to avoid extremely large status files
+            status["stdout_snippet"] = stdout_text[:2000]
         status_path.write_text(json.dumps(status))
         print(f"[DEBUG] Exception in _run_julia for run_id={run_id}: {exc}")
 
@@ -382,8 +397,6 @@ async def status(run_uuid: str):
     except Exception as exc:
         return {"status": "error", "error": f"bad result json: {exc}"}
 
-    if isinstance(results, dict):
-        results["status"] = "completed"
-        return results
-    else:
-        return {"status": "completed", "result": results}
+    # Always return a wrapper with explicit 'status' and 'result' keys so callers
+    # can reliably unwrap a full results dict regardless of the internal shape.
+    return {"status": "completed", "result": results}

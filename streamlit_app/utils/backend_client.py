@@ -39,3 +39,17 @@ def get_status(run_uuid: str):
     r = requests.get(f"{BACKEND_URL}/status/{run_uuid}", timeout=60)
     r.raise_for_status()
     return r.json()
+
+
+def get_result(run_uuid: str):
+    """Fetch the detailed result for a run from the backend.
+
+    The backend exposes `/reopt/result/{run_id}` which may return
+    either a wrapper `{"status":"completed","result": {...}}` or
+    the full results object with a `status` field injected. This helper
+    returns whatever the backend provides and leaves normalization to the
+    caller.
+    """
+    r = requests.get(f"{BACKEND_URL}/reopt/result/{run_uuid}", timeout=60)
+    r.raise_for_status()
+    return r.json()

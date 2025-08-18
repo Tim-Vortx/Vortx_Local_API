@@ -19,7 +19,28 @@ def to_daily_series(results: dict, day_index=0, tph=1):
     start = day_index * steps
 
     def sl(x):
-        return x[start:start+steps] if isinstance(x, list) else [0]*steps
+        # Coerce common iterable types (list, tuple, ndarray, pd.Series) to list
+        try:
+            if x is None:
+                seq = []
+            elif isinstance(x, (list, tuple)):
+                seq = list(x)
+            else:
+                # For numpy arrays, pandas Series, or other iterables
+                try:
+                    seq = list(x)
+                except Exception:
+                    seq = []
+        except Exception:
+            seq = []
+
+        slice_ = seq[start:start+steps]
+        # Pad with zeros if the slice is shorter than expected, or truncate if longer
+        if len(slice_) < steps:
+            slice_ = slice_ + [0] * (steps - len(slice_))
+        elif len(slice_) > steps:
+            slice_ = slice_[:steps]
+        return slice_
 
     load = sl(results.get("ElectricLoad", {}).get("load_series_kw", []))
     data = {"hour": [i/tph for i in range(steps)], "load": load}
@@ -55,6 +76,7 @@ def monthly_rollup(results: dict) -> pd.DataFrame:
         "Diesel_gen_MWh": diesel.resample("MS").sum() / 1000.0,
         "CHP_gen_MWh": chp.resample("MS").sum() / 1000.0,
     })
+    df.index = pd.to_datetime(df.index)
     df.index = df.index.strftime("%b")
     df.reset_index(inplace=True)
     df.rename(columns={"index":"Month"}, inplace=True)

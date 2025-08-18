@@ -1,22 +1,37 @@
 import streamlit as st
+from utils.backend_client import get_urdb
+
 
 def show():
-    st.header("⚡ Grid & Tariff")
+    scn = st.session_state.setdefault("scenario", {})
+    settings = scn.setdefault("Settings", {})
+    et = scn.setdefault("ElectricTariff", {})
 
-    options = ["Grid-Connected", "Off-Grid"]
-    default_connection = st.session_state.get("grid_connection", "Grid-Connected")
-    st.radio(
-        "Connection Type",
-        options,
-        key="grid_connection",
-        index=options.index(default_connection)
-    )
+    st.subheader("⚡ Grid / Tariff & Off-grid")
+    settings["off_grid_flag"] = st.checkbox("Off-grid (no utility interconnection)", value=settings.get("off_grid_flag", False), key="offgrid_toggle")
+    if settings["off_grid_flag"]:
+        et.clear()
+        st.info("Off-grid selected. Tariff inputs are ignored.")
+        return
 
-    if st.session_state.get("grid_connection") == "Grid-Connected":
-        st.text_input("Utility", key="utility_name", value=st.session_state.get("utility_name", ""))
-        st.text_input("Tariff Name", key="tariff_name", value=st.session_state.get("tariff_name", ""))
-        st.number_input("Blended Energy Rate ($/kWh)", min_value=0.0, value=st.session_state.get("blended_er", 0.15), key="blended_er")
-        st.number_input("Demand Charge ($/kW)", min_value=0.0, value=st.session_state.get("blended_dr", 20.0), key="blended_dr")
-        st.number_input("Fixed Monthly Charge ($)", min_value=0.0, value=st.session_state.get("fixed_monthly_charge", 50.0), key="fixed_monthly_charge")
-    else:
-        st.info("Running in off-grid mode — tariff inputs are ignored.")
+    if st.button("Lookup URDB rates for site lat/lon", key="lookup_urdb"):
+        lat = scn.get("Site", {}).get("latitude")
+        lon = scn.get("Site", {}).get("longitude")
+        try:
+            st.session_state["_urdb_rates"] = get_urdb(lat, lon)
+        except Exception as exc:
+            st.error(f"Failed to fetch URDB rates: {exc}")
+
+    rates = st.session_state.get("_urdb_rates", [])
+    if rates:
+        labels = [f"{r.get('label','<no label>')} — {r.get('utility','')}" for r in rates]
+        idx = st.selectbox("Select a utility rate", options=range(len(labels)), format_func=lambda i: labels[i], key="urdb_idx")
+        et.clear(); et["urdb_label"] = rates[idx]["label"]
+
+    with st.expander("Or enter a simple blended tariff"):
+        er = st.number_input("Blended energy rate ($/kWh)", value=et.get("blended_annual_energy_rate", 0.15), step=0.01, format="%.4f", key="blended_er")
+        dr = st.number_input("Blended demand rate ($/kW-mo)", value=et.get("blended_annual_demand_rate", 10.0), step=1.0, format="%.2f", key="blended_dr")
+        if st.button("Use blended tariff", key="use_blended"):
+            et.clear()
+            et["blended_annual_energy_rate"] = er
+            et["blended_annual_demand_rate"] = dr

@@ -14,6 +14,25 @@ def show():
         st.info("Run a scenario to see results.")
         return
 
+    # If backend returned runtime/precompilation errors, surface them clearly
+    msgs = results.get("Messages") if isinstance(results, dict) else None
+    if isinstance(msgs, dict):
+        errs = msgs.get("errors")
+        if errs:
+            st.error("Backend reported errors while running the model. See details below:")
+            # errs may be a nested list (as we observed from Julia traces). Render safely.
+            try:
+                for i, item in enumerate(errs):
+                    st.markdown(f"**Error {i+1}:**")
+                    # If item is a list of strings, join them; else stringify
+                    if isinstance(item, (list, tuple)):
+                        st.code("\n".join([str(x) for x in item]))
+                    else:
+                        st.code(str(item))
+            except Exception:
+                st.text(str(errs))
+            return
+
     fin = results.get("Financial", {})
     emi = results.get("Emissions", {})
     kpi_cols = st.columns(6)

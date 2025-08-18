@@ -1,1 +1,0 @@
-{"Messages":{"errors":[["core_utils.jl_596",["No NREL Developer API Key provided when trying to call PVWatts or Wind Toolkit.\n                    Within your Julia environment, specify ENV['NREL_DEVELOPER_API_KEY']='your API key'\n                    See https://nrel.github.io/REopt.jl/dev/ for more information."]]],"has_stacktrace":false,"warnings":[]},"status":"error"}

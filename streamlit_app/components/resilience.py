@@ -1,32 +1,18 @@
 import streamlit as st
 
-def show():
-    st.header("🛡️ Resilience Settings")
 
-    st.checkbox(
-        "Resilience Mode (Backup Power)",
-        key="resilience_mode",
-        value=st.session_state.get("resilience_mode", False),
-    )
-    if st.session_state.get("resilience_mode"):
-        st.number_input(
-            "Critical Load Fraction (0-1)",
-            min_value=0.0,
-            max_value=1.0,
-            value=st.session_state.get("critical_load_fraction", 0.5),
-            key="critical_load_fraction",
-        )
-        # keep both outage duration (hours) and editable start/end time steps
-        hours = st.number_input(
-            "Outage Duration (hours)",
-            min_value=0,
-            value=st.session_state.get("outage_hours", 24),
-            key="outage_hours",
-        )
-        # Convert outage hours into end time step relative to start=0 for simple UX
-        try:
-            tph = int(st.session_state.get("time_steps_per_hour", 1) or 1)
-            st.session_state["outage_start_time_step"] = 0
-            st.session_state["outage_end_time_step"] = int(hours * tph)
-        except Exception:
-            pass
+def show():
+    scn = st.session_state.setdefault("scenario", {})
+    el = scn.setdefault("ElectricLoad", {})
+    st.subheader("🛡️ Resilience & Constraints")
+
+    el["critical_load_fraction"] = st.number_input("Critical load fraction", value=el.get("critical_load_fraction", 1.0), min_value=0.0, max_value=1.0, step=0.1, key="crit_frac")
+    c1, c2 = st.columns(2)
+    with c1:
+        start = st.number_input("Outage start hour (1..8760)", value=scn.get("ElectricUtility", {}).get("outage_start_time_step", 0), min_value=0, max_value=8760, step=1, key="out_start")
+    with c2:
+        end = st.number_input("Outage end hour (1..8760)", value=scn.get("ElectricUtility", {}).get("outage_end_time_step", 0), min_value=0, max_value=8760, step=1, key="out_end")
+    if start and end:
+        eu = scn.setdefault("ElectricUtility", {})
+        eu["outage_start_time_step"] = int(start)
+        eu["outage_end_time_step"] = int(end)
