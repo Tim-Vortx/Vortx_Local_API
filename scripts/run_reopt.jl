@@ -3,6 +3,8 @@
 
 
 import Pkg
+# disable automatic package precompilation to avoid GeoInterfaceRecipes method overwrite errors
+ENV["JULIA_PKG_PRECOMPILE_AUTO"] = "0"
 Pkg.activate(joinpath(@__DIR__, ".."))
 
 using REopt, JuMP
