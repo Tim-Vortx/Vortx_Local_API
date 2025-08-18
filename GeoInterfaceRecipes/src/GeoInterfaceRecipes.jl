@@ -7,28 +7,6 @@ const GI = GeoInterface
 
 export @enable_geo_plots
 
-RecipesBase.@recipe function f(t::Union{GI.PointTrait,GI.MultiPointTrait}, geom)
-    seriestype --> :scatter
-    _coordvecs(t, geom)
-end
-
-RecipesBase.@recipe function f(t::Union{GI.AbstractLineStringTrait,GI.MultiLineStringTrait}, geom)
-    seriestype --> :path
-    _coordvecs(t, geom)
-end
-
-RecipesBase.@recipe function f(t::Union{GI.PolygonTrait,GI.MultiPolygonTrait,GI.LinearRingTrait}, geom)
-    seriestype --> :shape
-    _coordvecs(t, geom)
-end
-
-RecipesBase.@recipe f(::GI.GeometryCollectionTrait, collection) = collect(getgeom(collection))
-
-# Features
-RecipesBase.@recipe f(t::GI.FeatureTrait, feature) = GI.geometry(feature)
-
-RecipesBase.@recipe f(t::GI.FeatureCollectionTrait, fc) = collect(GI.getfeature(fc))
-
 # Convert coordinates to the form used by Plots.jl
 _coordvecs(::GI.PointTrait, geom) = [tuple(GI.coordinates(geom)...)]
 function _coordvecs(::GI.MultiPointTrait, geom)
