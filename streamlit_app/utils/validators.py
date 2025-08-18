@@ -60,7 +60,11 @@ def build_reopt_scenario(state: dict) -> tuple[dict, list]:
     settings = scn["Settings"]
     site = scn["Site"]
     settings["time_steps_per_hour"] = sget("time_steps_per_hour", 1)
-    settings["off_grid_flag"] = (sget("grid_connection") == "Off-Grid") or bool(sget("off_grid_flag", False))
+    settings["off_grid_flag"] = (
+        (sget("grid_connection") == "Off-Grid")
+        or bool(sget("off_grid_flag", False))
+        or bool(card("Settings").get("off_grid_flag"))
+    )
     # Allow the user to enter a 'site_location' free-text field containing either 'lat, lon' or a 5-digit ZIP
     site_loc = sget("site_location") or card("Site").get("site_location")
     lat = sget("latitude") or card("Site").get("latitude")
