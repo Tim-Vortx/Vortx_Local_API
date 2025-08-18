@@ -46,6 +46,9 @@ def show():
     disable_run = bool(errors) or bool(preflight_errors)
 
     if st.button("Run REopt", disabled=disable_run, key="run_btn"):
+        # Reset scenario in session state to ensure fresh submission
+        st.session_state["scenario"] = None
+
         with st.status("Submitting & optimizing...", expanded=True) as status:
             try:
                 job = submit_scenario(scenario)
@@ -62,6 +65,7 @@ def show():
                     try:
                         out = get_status(run_uuid)
                         last_out = out
+                        print(f"[DEBUG] Backend response: {out}")  # Log backend response
                     except Exception as exc:
                         # Surface transient polling errors but keep retrying until timeout
                         status.update(label=f"Error polling backend: {exc}. Retrying…")

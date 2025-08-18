@@ -1,7 +1,11 @@
-
 import time
 import os
 import json
+import pytest
+from fastapi.testclient import TestClient
+from backend.reopt_api_client import app
+
+client = TestClient(app)
 
 def test_run_and_poll_for_result():
     print("Starting test_run_and_poll_for_result...")
@@ -61,11 +65,6 @@ def test_run_reopt_valid_payload():
     run_id = data.get("run_id")
     print(f"Submitted job with run_id: {run_id}")
     assert "run_id" in data
-import pytest
-from fastapi.testclient import TestClient
-from backend.reopt_api_client import app
-
-client = TestClient(app)
 
 
 def test_run_reopt_missing_body():
@@ -78,3 +77,35 @@ def test_run_reopt_missing_body():
     assert response.status_code == 404
 
 # Add more tests for valid/invalid payloads as needed
+
+def test_run_reopt():
+    """Test the /reopt/run endpoint with a valid scenario."""
+    scenario = {
+        "Site": {"latitude": 34.05, "longitude": -118.25},
+        "ElectricLoad": {
+            "loads_kw": [1500.0] * 8760,
+            "year": 2025,
+            "time_steps_per_hour": 1,
+        },
+        "ElectricTariff": {"time_steps_per_hour": 1, "year": 2025, "NEM": False},
+        "Financial": {
+            "analysis_years": 25,
+            "offtaker_discount_rate_fraction": 0.08,
+            "elec_cost_escalation_rate_fraction": 0.025,
+            "itc": 0.3,
+            "macrs_option_years": 5,
+            "bonus_depreciation_fraction": 0.0,
+            "capital_incentive": 0.0,
+        },
+    }
+
+    response = client.post("/reopt/run", json={"scenario": scenario})
+    assert response.status_code == 200
+    assert "run_id" in response.json()
+
+def test_run_reopt_invalid_scenario():
+    """Test the /reopt/run endpoint with an invalid scenario."""
+    scenario = {"InvalidKey": "InvalidValue"}
+
+    response = client.post("/reopt/run", json={"scenario": scenario})
+    assert response.status_code == 422

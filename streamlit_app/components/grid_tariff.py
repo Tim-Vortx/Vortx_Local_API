@@ -4,6 +4,8 @@ from streamlit_app.utils.backend_client import get_urdb
 
 def show():
     scn = st.session_state.setdefault("scenario", {})
+    if scn is None:
+        scn = {}
     settings = scn.setdefault("Settings", {})
     et = scn.setdefault("ElectricTariff", {})
 

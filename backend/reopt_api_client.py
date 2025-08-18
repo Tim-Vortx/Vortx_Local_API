@@ -36,18 +36,114 @@ class Scenario(BaseModel):
     Site: dict
     ElectricLoad: dict
     ElectricTariff: dict
+    Financial: dict = {
+        "om_cost_escalation_rate_fraction": 0.025,
+        "offtaker_tax_rate_fraction": 0.26,
+        "third_party_ownership": False
+    }
 
 
 def _normalize_scenario(scn: dict) -> dict:
     """Normalize common shorthand fields from clients into the shapes
     expected by the Julia/REopt constructors.
-
-    - map ElectricLoad.hourly_profile -> ElectricLoad.loads_kw
-    - ensure ElectricLoad.year and time_steps_per_hour exist (prefer Settings.tph if present)
-    - force operating_reserve_required_fraction to 0.0 for on-grid scenarios
-    - map simple tariff keys (energy_charge -> blended_annual_energy_rate, name -> urdb_label)
     """
     s = copy.deepcopy(scn)
+
+    # Validate Site.latitude and Site.longitude
+    site = s.get("Site", {}) or {}
+    lat = site.get("latitude")
+    lon = site.get("longitude")
+    if lat is None or lon is None:
+        raise ValueError("Site.latitude and Site.longitude are required.")
+    try:
+        site["latitude"] = float(lat)
+        site["longitude"] = float(lon)
+    except ValueError:
+        raise ValueError("Site.latitude and Site.longitude must be numeric.")
+    s["Site"] = site
+
+    # Ensure off_grid_flag and include_health_in_objective are in Settings
+    settings = s.get("Settings", {}) or {}
+    settings["off_grid_flag"] = bool(settings.get("off_grid_flag", False))
+    settings["include_health_in_objective"] = bool(settings.get("include_health_in_objective", False))
+    s["Settings"] = settings
+
+    # Normalize Financial parameters
+    financial = s.get("Financial", {}) or {}
+    financial.setdefault("om_cost_escalation_rate_fraction", 0.025)
+    financial.setdefault("offtaker_tax_rate_fraction", 0.26)
+    financial.setdefault("third_party_ownership", False)
+
+    # Extend Financial normalization to include all required parameters
+    financial.setdefault("elec_cost_escalation_rate_fraction", 0.017)
+    financial.setdefault("existing_boiler_fuel_cost_escalation_rate_fraction", 0.015)
+    financial.setdefault("boiler_fuel_cost_escalation_rate_fraction", 0.015)
+    financial.setdefault("chp_fuel_cost_escalation_rate_fraction", 0.015)
+    financial.setdefault("generator_fuel_cost_escalation_rate_fraction", 0.012)
+    financial.setdefault("owner_tax_rate_fraction", 0.26)
+    financial.setdefault("owner_discount_rate_fraction", 0.0638)
+    financial.setdefault("value_of_lost_load_per_kwh", 1.00)
+    financial.setdefault("microgrid_upgrade_cost_fraction", 0.0)
+    financial.setdefault("macrs_five_year", [0.2, 0.32, 0.192, 0.1152, 0.1152, 0.0576])
+    financial.setdefault("macrs_seven_year", [0.1429, 0.2449, 0.1749, 0.1249, 0.0893, 0.0892, 0.0893, 0.0446])
+    financial.setdefault("offgrid_other_capital_costs", 0.0)
+    financial.setdefault("offgrid_other_annual_costs", 0.0)
+    financial.setdefault("min_initial_capital_costs_before_incentives", None)
+    financial.setdefault("max_initial_capital_costs_before_incentives", None)
+    financial.setdefault("CO2_cost_per_tonne", 51.0)
+    financial.setdefault("CO2_cost_escalation_rate_fraction", 0.042173)
+    financial.setdefault("NOx_grid_cost_per_tonne", None)
+    financial.setdefault("SO2_grid_cost_per_tonne", None)
+    financial.setdefault("PM25_grid_cost_per_tonne", None)
+    financial.setdefault("NOx_onsite_fuelburn_cost_per_tonne", None)
+    financial.setdefault("SO2_onsite_fuelburn_cost_per_tonne", None)
+    financial.setdefault("PM25_onsite_fuelburn_cost_per_tonne", None)
+    financial.setdefault("NOx_cost_escalation_rate_fraction", None)
+    financial.setdefault("SO2_cost_escalation_rate_fraction", None)
+    financial.setdefault("PM25_cost_escalation_rate_fraction", None)
+    financial.setdefault("include_health_in_objective", False)
+
+    # Map macrs_option_years to macrs_five_year or macrs_seven_year
+    macrs_option_years = financial.pop("macrs_option_years", None)
+    if macrs_option_years == 5:
+        financial["macrs_schedule"] = financial["macrs_five_year"]
+    elif macrs_option_years == 7:
+        financial["macrs_schedule"] = financial["macrs_seven_year"]
+
+    # Ensure macrs_option_years defaults to 5 if not provided
+    if macrs_option_years is None:
+        macrs_option_years = 5
+        financial["macrs_schedule"] = financial["macrs_five_year"]
+
+    # Filter out unexpected keys in Financial
+    allowed_financial_keys = {
+        "om_cost_escalation_rate_fraction",
+        "elec_cost_escalation_rate_fraction",
+        "offtaker_discount_rate_fraction",
+        "offtaker_tax_rate_fraction",
+        "third_party_ownership",
+        "macrs_schedule",
+        "bonus_depreciation_fraction",
+        "capital_incentive",
+        "analysis_years",
+        "itc"
+    }
+    financial = {k: v for k, v in financial.items() if k in allowed_financial_keys}
+    s["Financial"] = financial
+
+    # Debugging: Log the final Financial section
+    print(f"[DEBUG] Final Financial section: {financial}")
+
+    # Remove invalid fields from Financial
+    # Enhanced cleanup logic with debug logging
+    invalid_financial_keys = {"latitude", "longitude", "off_grid_flag", "include_health_in_objective"}
+    for key in invalid_financial_keys:
+        if key in financial:
+            print(f"[DEBUG] Removing invalid key from Financial: {key}")
+            financial.pop(key)
+
+    # Debugging: Log the final Financial section after removing invalid keys
+    print(f"[DEBUG] Final Financial section after cleanup: {financial}")
 
     # Read Settings.time_steps_per_hour if present (backwards-safe)
     settings_tph = (s.get("Settings", {}) or {}).get("time_steps_per_hour", None)
@@ -103,19 +199,6 @@ def _normalize_scenario(scn: dict) -> dict:
             raise ValueError(
                 f"ElectricLoad.loads_kw length {len(loads)} does not match expected {expected_len} (8760 * time_steps_per_hour)"
             )
-
-    # Site validation: ensure latitude and longitude are present and numeric
-    site = s.get("Site", {}) or {}
-    lat = site.get("latitude")
-    lon = site.get("longitude")
-    if lat is None or lon is None:
-        raise ValueError("Site.latitude and Site.longitude are required")
-    try:
-        site["latitude"] = float(lat)
-        site["longitude"] = float(lon)
-    except Exception:
-        raise ValueError("Site.latitude and Site.longitude must be numeric")
-    s["Site"] = site
 
     # ElectricTariff normalization
     tx = s.get("ElectricTariff", {}) or {}
@@ -237,33 +320,29 @@ async def _run_julia(run_id: str, scenario_file: Path, result_file: Path, solver
 
 @app.post("/reopt/run")
 async def run_reopt(scenario: Scenario, solver: Optional[str] = Query(None)):
-    """Kick off a REopt run and return a run identifier."""
+    """Run REopt with the provided scenario."""
+    # Normalize the scenario
+    normalized_scenario = _normalize_scenario(scenario.dict())
+
+    # Log the normalized scenario for debugging
+    print(f"[DEBUG] Normalized Scenario: {json.dumps(normalized_scenario, indent=2)}")
+
+    # Generate a unique run ID
     run_id = str(uuid.uuid4())
-    run_dir = RUNS_DIR / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
 
-    scenario_file = run_dir / "scenario.json"
-    result_file = run_dir / "result.json"
-    # Normalize and log the scenario received from the client
-    try:
-        raw = json.loads(scenario.json())
-    except Exception:
-        raw = json.loads(scenario.json())
+    # Define file paths for the scenario and result
+    scenario_file = RUNS_DIR / run_id / "scenario.json"
+    result_file = RUNS_DIR / run_id / "result.json"
 
-    try:
-        normalized = _normalize_scenario(raw)
-    except ValueError as ve:
-        # Return a 422 so the client (UI) can show a validation error instead of launching Julia
-        raise HTTPException(status_code=422, detail=str(ve))
-    scenario_json_str = json.dumps(normalized, indent=2)
-    print(f"[DEBUG] Received (normalized) scenario for run_id={run_id}: {scenario_json_str}")
-    scenario_file.write_text(scenario_json_str)
-    (run_dir / "status.json").write_text(json.dumps({"status": "running"}))
+    # Create the run directory
+    scenario_file.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"[DEBUG] Starting background Julia task for run_id={run_id}")
-    asyncio.create_task(
-        _run_julia(run_id, scenario_file, result_file, solver or DEFAULT_SOLVER)
-    )
+    # Write the normalized scenario to a file
+    with scenario_file.open("w") as f:
+        json.dump(normalized_scenario, f, indent=2)
+
+    # Run the Julia script
+    await _run_julia(run_id, scenario_file, result_file, solver or DEFAULT_SOLVER)
 
     return {"run_id": run_id}
 
@@ -297,7 +376,7 @@ async def get_result(run_id: str):
 async def schema():
     """
     Return a schema object for UI preflight.
-    Replace this stub with a real REopt v3 schema if you have one handy.
+    Replace this stub with a real REopt v3 job/inputs if you have one handy.
     """
     stub = {
         "ok": True,

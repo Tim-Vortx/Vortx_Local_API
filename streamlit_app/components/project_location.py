@@ -3,6 +3,8 @@ import streamlit as st
 
 def show():
     scn = st.session_state.setdefault("scenario", {})
+    if scn is None:
+        scn = {}
     site = scn.setdefault("Site", {})
     settings = scn.setdefault("Settings", {"time_steps_per_hour": 1, "off_grid_flag": False})
 
@@ -11,6 +13,7 @@ def show():
 
     c1, c2 = st.columns(2)
     with c1:
+        # Ensure latitude and longitude are persisted
         site["latitude"] = st.number_input("Latitude", value=site.get("latitude", 34.05), format="%.6f", key="site_lat")
     with c2:
         site["longitude"] = st.number_input("Longitude", value=site.get("longitude", -118.25), format="%.6f", key="site_lon")

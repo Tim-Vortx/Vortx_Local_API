@@ -77,6 +77,17 @@ if section == "Inputs":
         resilience.show()         # fills outage & critical load
     with st.container(border=True):
         financials.show()         # fills scenario["Financial"]
+        # Add missing financial parameters
+        financial = st.session_state["scenario"].setdefault("Financial", {})
+        financial["om_cost_escalation_rate_fraction"] = st.number_input(
+            "O&M Cost Escalation Rate Fraction", value=0.025, min_value=0.0, max_value=1.0, step=0.001
+        )
+        financial["offtaker_tax_rate_fraction"] = st.number_input(
+            "Offtaker Tax Rate Fraction", value=0.26, min_value=0.0, max_value=1.0, step=0.01
+        )
+        financial["third_party_ownership"] = st.checkbox(
+            "Third Party Ownership", value=False
+        )
 
 elif section == "Run":
     with st.container(border=True):

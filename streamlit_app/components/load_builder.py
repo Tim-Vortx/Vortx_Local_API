@@ -18,6 +18,8 @@ def _make_synthetic_profile(base: float, peak: float, time_steps_per_hour: int =
 
 def show():
     scn = st.session_state.setdefault("scenario", {})
+    if scn is None:
+        scn = {}
     el = scn.setdefault("ElectricLoad", {})
     settings = scn.setdefault("Settings", {"time_steps_per_hour": 1})
 
