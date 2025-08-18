@@ -159,6 +159,17 @@ def build_reopt_scenario(state: dict) -> tuple[dict, list]:
     es.setdefault("installed_cost_per_kw", 150.0)
     es.setdefault("soc_min_fraction", 0.1)
 
+    # Apply simplified incentive inputs to PV and ElectricStorage
+    itc = sget("itc", 0.30)
+    macrs_years = sget("macrs_option_years", 5)
+    bonus = sget("bonus_depreciation_fraction", 0.0)
+    pv.setdefault("federal_itc_fraction", itc)
+    pv.setdefault("macrs_option_years", macrs_years)
+    pv.setdefault("macrs_bonus_fraction", bonus)
+    es.setdefault("itc_fraction", itc)
+    es.setdefault("macrs_option_years", macrs_years)
+    es.setdefault("macrs_bonus_fraction", bonus)
+
     # NG (CHP) and Diesel map straight through if user enabled them in your cards
     if card("CHP"):
         scn["CHP"] = card("CHP")
@@ -181,10 +192,9 @@ def build_reopt_scenario(state: dict) -> tuple[dict, list]:
     fin["analysis_years"] = sget("analysis_years", 25)
     fin["offtaker_discount_rate_fraction"] = sget("offtaker_discount_rate_fraction", 0.08)
     fin["elec_cost_escalation_rate_fraction"] = sget("elec_cost_escalation_rate_fraction", 0.025)
-    fin["itc"] = sget("itc", 0.30)
-    fin["macrs_option_years"] = sget("macrs_option_years", 5)
-    fin["bonus_depreciation_fraction"] = sget("bonus_depreciation_fraction", 0.0)
-    fin["capital_incentive"] = sget("capital_incentive", 0.0)
+    fin["om_cost_escalation_rate_fraction"] = sget("om_cost_escalation_rate_fraction", 0.025)
+    fin["offtaker_tax_rate_fraction"] = sget("offtaker_tax_rate_fraction", 0.26)
+    fin["third_party_ownership"] = sget("third_party_ownership", False)
 
     # validations
     err = _validate_load(scn)
