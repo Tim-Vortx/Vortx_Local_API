@@ -88,6 +88,9 @@ if section == "Inputs":
         financial["third_party_ownership"] = st.checkbox(
             "Third Party Ownership", value=False
         )
+        # Remove macrs_schedule if present and ensure macrs_option_years is set
+        financial.pop("macrs_schedule", None)
+        financial.setdefault("macrs_option_years", 5)
 
 elif section == "Run":
     with st.container(border=True):

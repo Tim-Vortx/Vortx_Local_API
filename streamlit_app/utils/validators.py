@@ -91,6 +91,12 @@ def build_reopt_scenario(state: dict) -> tuple[dict, list]:
             if s in zip_map:
                 lat, lon = zip_map[s]
                 parsed = True
+    # Ensure latitude and longitude are set
+    if not lat or not lon:
+        errors.append("Latitude and Longitude are required but missing.")
+        lat = 0.0  # Default latitude (example: equator)
+        lon = 0.0  # Default longitude (example: prime meridian)
+
     site["latitude"] = lat
     site["longitude"] = lon
 

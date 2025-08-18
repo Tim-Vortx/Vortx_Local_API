@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import time
 import os
-from utils.backend_client import (
+from streamlit_app.utils.backend_client import (
     submit_scenario,
     get_status,
     get_result,
@@ -59,13 +59,20 @@ def show():
         key="reopt_backend",
     )
 
+    # Hardcoded NREL API Key
+    nrel_api_key = "NLYEhO9rbdzeKihekZZkQf0DiaNNOXjsLw9fbgJE"
+
+    if backend_choice == "NREL API" and not nrel_api_key:
+        st.error("NREL API Key is required for NREL API execution mode.")
+        disable_run = True
+
     if st.button("Run REopt", disabled=disable_run, key="run_btn"):
         # Reset scenario in session state to ensure fresh submission
         st.session_state["scenario"] = None
 
         # Select appropriate backend helpers
         if backend_choice == "NREL API":
-            submit = submit_scenario_nrel
+            submit = lambda scenario: submit_scenario_nrel({"api_key": nrel_api_key, **scenario})
             status_fn = get_status_nrel
             result_fn = get_result_nrel
         else:

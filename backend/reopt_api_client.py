@@ -126,18 +126,6 @@ def _normalize_scenario(scn: dict) -> dict:
     financial.setdefault("PM25_cost_escalation_rate_fraction", None)
     financial.setdefault("include_health_in_objective", False)
 
-    # Map macrs_option_years to macrs_five_year or macrs_seven_year
-    macrs_option_years = financial.pop("macrs_option_years", None)
-    if macrs_option_years == 5:
-        financial["macrs_schedule"] = financial["macrs_five_year"]
-    elif macrs_option_years == 7:
-        financial["macrs_schedule"] = financial["macrs_seven_year"]
-
-    # Ensure macrs_option_years defaults to 5 if not provided
-    if macrs_option_years is None:
-        macrs_option_years = 5
-        financial["macrs_schedule"] = financial["macrs_five_year"]
-
     # Filter out unexpected keys in Financial
     allowed_financial_keys = {
         "om_cost_escalation_rate_fraction",
@@ -145,7 +133,6 @@ def _normalize_scenario(scn: dict) -> dict:
         "offtaker_discount_rate_fraction",
         "offtaker_tax_rate_fraction",
         "third_party_ownership",
-        "macrs_schedule",
         "bonus_depreciation_fraction",
         "capital_incentive",
         "analysis_years",

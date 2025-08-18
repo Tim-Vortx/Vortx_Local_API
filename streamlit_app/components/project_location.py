@@ -46,3 +46,7 @@ def show():
         else:
             # don't overwrite existing lat/lon if unknown ZIP
             st.caption("ZIP not in local mapping; enter lat/lon manually if needed.")
+
+    # Safeguard to persist latitude and longitude if already set
+    site["latitude"] = site.get("latitude", 34.05)
+    site["longitude"] = site.get("longitude", -118.25)
