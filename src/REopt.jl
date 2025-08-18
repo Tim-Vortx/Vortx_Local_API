@@ -1,6 +1,4 @@
 # REopt®, Copyright (c) Alliance for Sustainable Energy, LLC. See also https://github.com/NREL/REopt.jl/blob/master/LICENSE.
-__precompile__(false)
-
 module REopt
 
 export

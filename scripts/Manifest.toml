@@ -43,7 +43,7 @@ version = "0.1.42"
     Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [[deps.ArchGDAL]]
-deps = ["CEnum", "ColorTypes", "Dates", "DiskArrays", "Extents", "GDAL", "GeoFormatTypes", "GeoInterface", "ImageCore", "Tables"]
+deps = ["CEnum", "ColorTypes", "Dates", "DiskArrays", "Extents", "GDAL", "GeoFormatTypes", "GeoInterface", "GeoInterfaceRecipes", "ImageCore", "Tables"]
 git-tree-sha1 = "70908bb727c9a0ba863c5145aa48ee838cc29b84"
 uuid = "c9ce4bd3-c3d5-55b8-8973-c0e20141b8c3"
 version = "0.9.3"
@@ -374,21 +374,6 @@ version = "6.3.0+0"
 git-tree-sha1 = "8e233d5167e63d708d41f87597433f59a0f213fe"
 uuid = "68eda718-8dee-11e9-39e7-89f7f65f511f"
 version = "0.4.4"
-
-[[deps.GeoInterface]]
-deps = ["DataAPI", "Extents", "GeoFormatTypes"]
-git-tree-sha1 = "0f265264b9287a19715dc5d491dbe3aff00c1e71"
-uuid = "cf35fbd7-0cd7-5166-be24-54bfbe79505f"
-version = "1.5.0"
-
-    [deps.GeoInterface.extensions]
-    GeoInterfaceMakieExt = ["Makie", "GeometryBasics"]
-    GeoInterfaceRecipesBaseExt = "RecipesBase"
-
-    [deps.GeoInterface.weakdeps]
-    GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
-    Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
-    RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 
 
 [[deps.Giflib_jll]]
