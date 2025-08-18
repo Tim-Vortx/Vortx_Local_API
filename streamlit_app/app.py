@@ -38,6 +38,7 @@ try:
         results_capex_opex,
         results_emissions_resilience,
         scenarios_compare,
+        centrifuge_load_model,
     )
 except Exception:
     # Fallback for `streamlit run streamlit_app/app.py` (script context).
@@ -62,6 +63,7 @@ except Exception:
         results_capex_opex,
         results_emissions_resilience,
         scenarios_compare,
+        centrifuge_load_model,
     )
 
 
@@ -83,7 +85,7 @@ def _sync_scenario_to_session() -> None:
 # --- Sidebar nav ---
 with st.sidebar:
     st.header("Navigation")
-    section = st.radio("Section", ["Inputs", "Run", "Results", "Scenarios"], index=0)
+    section = st.radio("Section", ["Inputs", "Run", "Results", "Scenarios", "Centrifuge Model"], index=0)
     st.caption(f"Backend: `{BACKEND_URL}` (set VORTX_BACKEND_URL to change)")
 
 # --- Page router ---
@@ -122,3 +124,7 @@ elif section == "Results":
 elif section == "Scenarios":
     with st.container(border=True):
         scenarios_compare.show()
+
+elif section == "Centrifuge Model":
+    with st.container(border=True):
+        centrifuge_load_model.show()
