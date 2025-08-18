@@ -112,10 +112,15 @@ mutable struct Financial
         NOx_cost_escalation_rate_fraction::Union{Nothing,Real} = nothing,
         SO2_cost_escalation_rate_fraction::Union{Nothing,Real} = nothing,
         PM25_cost_escalation_rate_fraction::Union{Nothing,Real} = nothing,
-        # fields from other models needed for validation
-        latitude::Real, # Passed from Site
-        longitude::Real, # Passed from Site
-        include_health_in_objective::Bool = false # Passed from Settings
+    # legacy / compatibility keywords (accepted but deprecated)
+    macrs_option_years::Int = 5,
+    bonus_depreciation_fraction::Real = 0.0,
+    capital_incentive::Real = 0.0,
+    itc::Real = 0.0,
+    # fields from other models needed for validation
+    latitude::Real, # Passed from Site
+    longitude::Real, # Passed from Site
+    include_health_in_objective::Bool = false # Passed from Settings
     )
         
         if off_grid_flag && !(microgrid_upgrade_cost_fraction == 0.0)
@@ -175,6 +180,20 @@ mutable struct Financial
 
         if missing_health_inputs && include_health_in_objective
             throw(@error("To include health costs in the objective function, you must either enter custom emissions costs and escalation rates or a site location within the CAMx grid."))
+        end
+
+        # Backwards compatibility handling for deprecated inputs
+        if macrs_option_years != 5 && macrs_option_years != 7
+            @warn "Deprecated Financial input `macrs_option_years` has unexpected value $macrs_option_years; expected 5 or 7."
+        elseif macrs_option_years == 7
+            # nothing to change structurally; keep both macrs arrays available
+            @info "Deprecated Financial input `macrs_option_years=7` received. Using available MACRS arrays; no structural change applied."
+        end
+        if bonus_depreciation_fraction != 0.0
+            @warn "Deprecated Financial input `bonus_depreciation_fraction` is provided but no longer used directly in REopt Financial; value will be ignored."
+        end
+        if capital_incentive != 0.0 || itc != 0.0
+            @warn "Deprecated Financial inputs `capital_incentive`/`itc` are provided but handled elsewhere; values will be ignored by this constructor."
         end
     
 

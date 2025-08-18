@@ -2,7 +2,13 @@ import streamlit as st
 
 
 def show():
-    scn = st.session_state.setdefault("scenario", {})
+    # Ensure `scenario` in session_state is a dict. If a previous run
+    # or another component set it to None, `.setdefault` would return
+    # the existing None and cause AttributeError when `.get` is used.
+    scn = st.session_state.get("scenario")
+    if not isinstance(scn, dict):
+        scn = {}
+        st.session_state["scenario"] = scn
     st.subheader("🔋 DER Selection & Sizing")
 
     # PV

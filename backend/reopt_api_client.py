@@ -8,6 +8,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Query, Body
 from pydantic import BaseModel
 import copy
+from pathlib import Path as _Path
 
 # --- optional CORS so Streamlit/frontend can call this API ---
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,28 @@ from fastapi.middleware.cors import CORSMiddleware
 PROJECT_ROOT = Path(os.getenv("REOPT_PROJECT_ROOT", Path(__file__).resolve().parents[1]))
 RUNS_DIR = Path(os.getenv("REOPT_RUNS_DIR", Path(__file__).parent / "runs"))
 DEFAULT_SOLVER = os.getenv("REOPT_SOLVER", "HiGHS")
+
+# Load a backend-local .env file if present. This allows operators to place
+# a `backend/.env` file (repo-local) containing `REOPT_NREL_API_KEY=...` and
+# have the FastAPI process load it at startup without changing system-wide
+# environment files.
+_env_path = Path(__file__).parent / ".env"
+if _env_path.exists():
+    try:
+        for raw in _env_path.read_text().splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            k = k.strip()
+            v = v.strip().strip('"').strip("'")
+            # only set if not already present in the environment
+            os.environ.setdefault(k, v)
+    except Exception:
+        # don't fail startup if env file is malformed; log debug and continue
+        print("[DEBUG] Failed to load backend/.env; continuing without it.")
 
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -267,10 +290,20 @@ async def _run_julia(run_id: str, scenario_file: Path, result_file: Path, solver
         solver,
     ]
 
+    # Prepare environment for the Julia subprocess. Copy current env and
+    # forward a backend-specific API key if provided. This lets operators
+    # set REOPT_NREL_API_KEY in the backend environment and have Julia
+    # pick it up as NREL_DEVELOPER_API_KEY.
+    env = os.environ.copy()
+    reopt_key = os.getenv("REOPT_NREL_API_KEY")
+    if reopt_key:
+        env["NREL_DEVELOPER_API_KEY"] = reopt_key
+
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=env,
     )
     print(f"[DEBUG] Julia process started for run_id={run_id}")
     stdout, stderr = await proc.communicate()
